@@ -5,7 +5,7 @@ import logging
 from typing import Any, Optional, Dict
 
 from pymodbus.client import AsyncModbusSerialClient
-from pymodbus.framer.rtu_framer import ModbusRtuFramer
+from pymodbus.framer import ModbusRtuFramer
 from pymodbus.exceptions import ModbusException
 
 from homeassistant.core import HomeAssistant
@@ -57,7 +57,7 @@ class SandiSolarModbusHub:
 
         _LOGGER.info("Initializing SANDISOLAR Modbus RTU on %s @ %s baud", self.port, self.baudrate)
 
-        # Správná konfigurace – kompatibilní s originální HA Modbus integrací
+        # Kompatibilní inicializace pro HA OS (pymodbus 3.4.x)
         self._client = AsyncModbusSerialClient(
             port=self.port,
             baudrate=self.baudrate,
@@ -66,9 +66,13 @@ class SandiSolarModbusHub:
             stopbits=1,
             timeout=5,
             framer=ModbusRtuFramer,
-            message_wait_milliseconds=850,
-            delay=0,
         )
+
+        # Ruční nastavení message_wait_milliseconds (funguje ve všech verzích)
+        try:
+            self._client.params.message_wait_milliseconds = 850
+        except Exception:
+            _LOGGER.warning("message_wait_milliseconds not supported in this pymodbus version")
 
         connected = await self._client.connect()
         if not connected:

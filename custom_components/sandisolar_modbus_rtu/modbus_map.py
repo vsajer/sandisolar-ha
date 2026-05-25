@@ -28,7 +28,10 @@ class RegisterDefinition:
 # ---------------------------------------------------------------------------
 
 INPUT_REGISTERS: Dict[str, RegisterDefinition] = {
-    # PV
+
+    # -----------------------------------------------------------------------
+    # PV (Solar)
+    # -----------------------------------------------------------------------
     "pv_voltage": RegisterDefinition(
         key="pv_voltage",
         address=64,
@@ -59,8 +62,20 @@ INPUT_REGISTERS: Dict[str, RegisterDefinition] = {
         name_cs="Výkon FV",
         icon="mdi:solar-power",
     ),
+    "pv_status": RegisterDefinition(
+        key="pv_status",
+        address=251,
+        count=1,
+        scale=1,
+        unit=None,
+        name_en="PV Status",
+        name_cs="Stav FV",
+        icon="mdi:information",
+    ),
 
+    # -----------------------------------------------------------------------
     # Battery
+    # -----------------------------------------------------------------------
     "battery_voltage": RegisterDefinition(
         key="battery_voltage",
         address=70,
@@ -91,8 +106,30 @@ INPUT_REGISTERS: Dict[str, RegisterDefinition] = {
         name_cs="Stav nabití baterie",
         icon="mdi:battery-high",
     ),
+    "battery_temperature": RegisterDefinition(
+        key="battery_temperature",
+        address=73,
+        count=1,
+        scale=0.1,
+        unit="°C",
+        name_en="Battery Temperature",
+        name_cs="Teplota baterie",
+        icon="mdi:thermometer",
+    ),
+    "battery_status": RegisterDefinition(
+        key="battery_status",
+        address=74,
+        count=1,
+        scale=1,
+        unit=None,
+        name_en="Battery Status",
+        name_cs="Stav baterie",
+        icon="mdi:information",
+    ),
 
-    # Grid
+    # -----------------------------------------------------------------------
+    # Grid (AC Input)
+    # -----------------------------------------------------------------------
     "grid_voltage": RegisterDefinition(
         key="grid_voltage",
         address=80,
@@ -123,8 +160,20 @@ INPUT_REGISTERS: Dict[str, RegisterDefinition] = {
         name_cs="Výkon ze sítě",
         icon="mdi:flash",
     ),
+    "grid_status": RegisterDefinition(
+        key="grid_status",
+        address=261,
+        count=1,
+        scale=1,
+        unit=None,
+        name_en="Grid Status",
+        name_cs="Stav sítě",
+        icon="mdi:information",
+    ),
 
-    # Load
+    # -----------------------------------------------------------------------
+    # Load (AC Output)
+    # -----------------------------------------------------------------------
     "load_power": RegisterDefinition(
         key="load_power",
         address=300,
@@ -135,6 +184,50 @@ INPUT_REGISTERS: Dict[str, RegisterDefinition] = {
         name_cs="Zátěž",
         icon="mdi:home-lightning-bolt",
     ),
+    "output_load": RegisterDefinition(
+        key="output_load",
+        address=301,
+        count=1,
+        scale=1,
+        unit="%",
+        name_en="Output Load",
+        name_cs="Zatížení výstupu",
+        icon="mdi:gauge",
+    ),
+
+    # -----------------------------------------------------------------------
+    # Inverter Status
+    # -----------------------------------------------------------------------
+    "inverter_status": RegisterDefinition(
+        key="inverter_status",
+        address=310,
+        count=1,
+        scale=1,
+        unit=None,
+        name_en="Inverter Status",
+        name_cs="Stav měniče",
+        icon="mdi:information",
+    ),
+    "temperature": RegisterDefinition(
+        key="temperature",
+        address=311,
+        count=1,
+        scale=0.1,
+        unit="°C",
+        name_en="Inverter Temperature",
+        name_cs="Teplota měniče",
+        icon="mdi:thermometer",
+    ),
+    "error_code": RegisterDefinition(
+        key="error_code",
+        address=312,
+        count=1,
+        scale=1,
+        unit=None,
+        name_en="Error Code",
+        name_cs="Chybový kód",
+        icon="mdi:alert-circle",
+    ),
 }
 
 
@@ -143,7 +236,10 @@ INPUT_REGISTERS: Dict[str, RegisterDefinition] = {
 # ---------------------------------------------------------------------------
 
 HOLDING_REGISTERS: Dict[str, RegisterDefinition] = {
-    # Switches
+
+    # -----------------------------------------------------------------------
+    # Switches (ON/OFF)
+    # -----------------------------------------------------------------------
     "inverter_onoff": RegisterDefinition(
         key="inverter_onoff",
         address=0,
@@ -184,7 +280,9 @@ HOLDING_REGISTERS: Dict[str, RegisterDefinition] = {
         max_value=1,
     ),
 
-    # Number entities
+    # -----------------------------------------------------------------------
+    # Limits / Numbers
+    # -----------------------------------------------------------------------
     "ac_charge_soc_limit": RegisterDefinition(
         key="ac_charge_soc_limit",
         address=150,

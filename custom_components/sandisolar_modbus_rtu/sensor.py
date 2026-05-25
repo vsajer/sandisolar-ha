@@ -5,7 +5,14 @@ from typing import Any
 
 from homeassistant.components.sensor import SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfElectricCurrent, UnitOfElectricPotential, UnitOfEnergy, UnitOfFrequency, UnitOfPower, UnitOfTemperature
+from homeassistant.const import (
+    UnitOfElectricCurrent,
+    UnitOfElectricPotential,
+    UnitOfEnergy,
+    UnitOfFrequency,
+    UnitOfPower,
+    UnitOfTemperature,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -33,13 +40,13 @@ async def async_setup_entry(
 ) -> None:
     """Set up sensor entities."""
     hub: SandiSolarModbusHub = hass.data[DOMAIN][entry.entry_id]
-    
+
     entities = []
     use_czech = entry.options.get("use_czech_names", False)
-    
+
     for key, reg_def in INPUT_REGISTERS.items():
         entities.append(SandiSolarSensor(hub, reg_def, key, use_czech))
-    
+
     async_add_entities(entities)
 
 
@@ -57,7 +64,7 @@ class SandiSolarSensor(SandiSolarEntity, SensorEntity):
         super().__init__(hub, reg_def, use_czech)
         self._key = key
         self._attr_native_unit_of_measurement = UNIT_MAPPING.get(reg_def.unit) if reg_def.unit else None
-        
+
         if reg_def.unit in ["kWh", "W", "A", "V"]:
             self._attr_state_class = SensorStateClass.MEASUREMENT
         else:
@@ -69,8 +76,15 @@ class SandiSolarSensor(SandiSolarEntity, SensorEntity):
             value = await self._hub.read_input_register(self._key)
             if value is not None:
                 self._attr_native_value = value
+                self._hub._cache[self._key] = value
+                self._attr_available = True
             else:
                 self._attr_available = False
         except Exception as err:
             _LOGGER.error("Error updating sensor %s: %s", self.name, err)
             self._attr_available = False
+
+    @property
+    def extra_state_attributes(self):
+        """Return additional attributes for this sensor."""
+        return self._hub.get_attributes_for(self._key)

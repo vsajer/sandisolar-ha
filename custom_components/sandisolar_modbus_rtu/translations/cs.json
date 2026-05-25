@@ -1,7 +1,4 @@
 {
-  "title": "SANDISOLAR Modbus RTU",
-  "flow_title": "SANDISOLAR Modbus RTU: {name}",
-
   "config": {
     "step": {
       "user": {
@@ -23,7 +20,6 @@
       "already_configured": "Toto zařízení je již nakonfigurováno."
     }
   },
-
   "options": {
     "step": {
       "init": {
@@ -35,7 +31,6 @@
       }
     }
   },
-
   "services": {
     "dump_registers": {
       "name": "Výpis všech Modbus registrů",

@@ -14,6 +14,9 @@ from .modbus_map import INPUT_REGISTERS, HOLDING_REGISTERS
 
 _LOGGER = logging.getLogger(__name__)
 
+DEFAULT_PORT = "/dev/ttyUSB0"
+TEST_REGISTER = 0  # Device status register
+
 
 class SandiSolarModbusHub:
     """Main Modbus RTU hub for SANDISOLAR."""
@@ -23,17 +26,33 @@ class SandiSolarModbusHub:
         self.hass = hass
         self.entry = entry
 
-        self.port = entry.data["port"]
-        self.baudrate = entry.data["baudrate"]
-        self.slave_id = entry.data["slave_id"]
-        self.update_interval = entry.data["update_interval"]
+        # Auto-fill port if missing
+        self.port = entry.data.get("port", DEFAULT_PORT)
+        self.baudrate = entry.data.get("baudrate", 9600)
+        self.slave_id = entry.data.get("slave_id", 1)
+        self.update_interval = entry.data.get("update_interval", 30)
 
         self._client: Optional[AsyncModbusSerialClient] = None
         self._lock = asyncio.Lock()
 
+    # -------------------------------------------------------------------------
+    # INITIALIZATION
+    # -------------------------------------------------------------------------
+
     async def async_init(self) -> None:
-        """Initialize Modbus connection."""
-        _LOGGER.info("Initializing SANDISOLAR Modbus RTU on %s", self.port)
+        """Initialize Modbus connection and test communication."""
+
+        # Check if port is already used by another integration
+        if self._is_port_in_use():
+            raise ModbusException(
+                f"Serial port {self.port} is already used by another integration."
+            )
+
+        _LOGGER.info(
+            "Initializing SANDISOLAR Modbus RTU on %s @ %s baud",
+            self.port,
+            self.baudrate,
+        )
 
         self._client = AsyncModbusSerialClient(
             port=self.port,
@@ -49,16 +68,47 @@ class SandiSolarModbusHub:
         if not connected:
             raise ModbusException(f"Cannot open serial port {self.port}")
 
-        _LOGGER.info("SANDISOLAR Modbus RTU connected successfully")
+        _LOGGER.info("Serial port opened successfully, testing Modbus communication...")
 
-    async def close(self) -> None:
-        """Close Modbus connection."""
-        if self._client:
-            await self._client.close()
-            _LOGGER.info("SANDISOLAR Modbus RTU connection closed")
+        # Test read register 0 (Device Status)
+        try:
+            result = await self._client.read_input_registers(
+                address=TEST_REGISTER,
+                count=1,
+                unit=self.slave_id,
+            )
+        except Exception as err:
+            raise ModbusException(f"Modbus test read failed: {err}") from err
+
+        if result.isError():
+            raise ModbusException(f"Device did not respond to test read: {result}")
+
+        _LOGGER.info("SANDISOLAR Modbus communication OK (Device Status read successful)")
 
     # -------------------------------------------------------------------------
-    # INTERNAL HELPERS
+    # PORT CHECK
+    # -------------------------------------------------------------------------
+
+    def _is_port_in_use(self) -> bool:
+        """Check if another integration is already using this serial port."""
+        for domain, entries in self.hass.data.items():
+            if not isinstance(entries, dict):
+                continue
+
+            for entry_id, hub in entries.items():
+                if hasattr(hub, "port") and hub.port == self.port:
+                    _LOGGER.warning(
+                        "Port %s is already used by integration: %s (%s)",
+                        self.port,
+                        domain,
+                        entry_id,
+                    )
+                    return True
+
+        return False
+
+    # -------------------------------------------------------------------------
+    # CONNECTION MANAGEMENT
     # -------------------------------------------------------------------------
 
     async def _ensure_connection(self) -> None:
@@ -88,7 +138,7 @@ class SandiSolarModbusHub:
                 result = await self._client.read_input_registers(
                     address=reg.address,
                     count=reg.count,
-                    slave=self.slave_id,
+                    unit=self.slave_id,
                 )
             except Exception as err:
                 _LOGGER.error("Modbus read_input error (%s): %s", key, err)
@@ -119,7 +169,7 @@ class SandiSolarModbusHub:
                 result = await self._client.read_holding_registers(
                     address=reg.address,
                     count=reg.count,
-                    slave=self.slave_id,
+                    unit=self.slave_id,
                 )
             except Exception as err:
                 _LOGGER.error("Modbus read_holding error (%s): %s", key, err)
@@ -148,7 +198,7 @@ class SandiSolarModbusHub:
                 result = await self._client.write_register(
                     address=reg.address,
                     value=raw_value,
-                    slave=self.slave_id,
+                    unit=self.slave_id,
                 )
             except Exception as err:
                 _LOGGER.error("Modbus write error (%s): %s", key, err)
@@ -159,3 +209,13 @@ class SandiSolarModbusHub:
             return False
 
         return True
+
+    # -------------------------------------------------------------------------
+    # CLOSE CONNECTION
+    # -------------------------------------------------------------------------
+
+    async def close(self) -> None:
+        """Close Modbus connection."""
+        if self._client:
+            await self._client.close()
+            _LOGGER.info("SANDISOLAR Modbus RTU connection closed")

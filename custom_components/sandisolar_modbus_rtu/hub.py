@@ -16,36 +16,16 @@ from .modbus_map import INPUT_REGISTERS, HOLDING_REGISTERS
 _LOGGER = logging.getLogger(__name__)
 
 DEFAULT_PORT = "/dev/ttyUSB0"
-TEST_REGISTER = 0  # Device status register
+
+# 🔥 SD-PRO-EU vždy odpoví na register 64 (PV Voltage)
+TEST_REGISTER = 64
 
 
-# Skupiny pro automatické atributy
 ATTRIBUTE_GROUPS = {
-    "pv": [
-        "pv_voltage",
-        "pv_current",
-        "pv_power",
-        "pv_status",
-    ],
-    "battery": [
-        "battery_voltage",
-        "battery_current",
-        "battery_temperature",
-        "battery_soc",
-        "battery_status",
-    ],
-    "grid": [
-        "grid_voltage",
-        "grid_frequency",
-        "grid_power",
-        "grid_status",
-    ],
-    "inverter": [
-        "inverter_status",
-        "output_load",
-        "temperature",
-        "error_code",
-    ],
+    "pv": ["pv_voltage", "pv_current", "pv_power", "pv_status"],
+    "battery": ["battery_voltage", "battery_current", "battery_temperature", "battery_soc", "battery_status"],
+    "grid": ["grid_voltage", "grid_frequency", "grid_power", "grid_status"],
+    "inverter": ["inverter_status", "output_load", "temperature", "error_code"],
 }
 
 
@@ -53,7 +33,6 @@ class SandiSolarModbusHub:
     """Main Modbus RTU hub for SANDISOLAR."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
-        """Initialize the hub."""
         self.hass = hass
         self.entry = entry
 
@@ -64,8 +43,6 @@ class SandiSolarModbusHub:
 
         self._client: Optional[AsyncModbusSerialClient] = None
         self._lock = asyncio.Lock()
-
-        # Cache všech hodnot pro atributy a diagnostiku
         self._cache: Dict[str, Any] = {}
 
     # -------------------------------------------------------------------------
@@ -76,17 +53,11 @@ class SandiSolarModbusHub:
         """Initialize Modbus connection and test communication."""
 
         if self._is_port_in_use():
-            raise ModbusException(
-                f"Serial port {self.port} is already used by another integration."
-            )
+            raise ModbusException(f"Serial port {self.port} is already used by another integration.")
 
-        _LOGGER.info(
-            "Initializing SANDISOLAR Modbus RTU on %s @ %s baud",
-            self.port,
-            self.baudrate,
-        )
+        _LOGGER.info("Initializing SANDISOLAR Modbus RTU on %s @ %s baud", self.port, self.baudrate)
 
-        # 🔥 Tohle je správná inicializace – 100% kompatibilní s originální HA Modbus integrací
+        # 🔥 Tohle je správná konfigurace – identická s originální HA Modbus integrací
         self._client = AsyncModbusSerialClient(
             port=self.port,
             baudrate=self.baudrate,
@@ -105,7 +76,6 @@ class SandiSolarModbusHub:
 
         _LOGGER.info("Serial port opened successfully, testing Modbus communication...")
 
-        # Test read register 0 (Device Status)
         try:
             result = await self._client.read_input_registers(
                 address=TEST_REGISTER,
@@ -120,36 +90,29 @@ class SandiSolarModbusHub:
 
         raw = result.registers[0]
         self._cache["device_status"] = raw
-        _LOGGER.info("SANDISOLAR Modbus communication OK (Device Status=%s)", raw)
+        _LOGGER.info("SANDISOLAR Modbus communication OK (Test Register=%s)", raw)
 
     # -------------------------------------------------------------------------
     # PORT CHECK
     # -------------------------------------------------------------------------
 
     def _is_port_in_use(self) -> bool:
-        """Check if another integration is already using this serial port."""
         for domain, entries in self.hass.data.items():
             if not isinstance(entries, dict):
                 continue
 
             for entry_id, hub in entries.items():
                 if hasattr(hub, "port") and hub.port == self.port:
-                    _LOGGER.warning(
-                        "Port %s is already used by integration: %s (%s)",
-                        self.port,
-                        domain,
-                        entry_id,
-                    )
+                    _LOGGER.warning("Port %s is already used by integration: %s (%s)", self.port, domain, entry_id)
                     return True
 
         return False
 
     # -------------------------------------------------------------------------
-    # CONNECTION MANAGEMENT WITH EXPONENTIAL BACKOFF
+    # CONNECTION MANAGEMENT
     # -------------------------------------------------------------------------
 
     async def _ensure_connection(self) -> None:
-        """Reconnect with exponential backoff."""
         if not self._client:
             raise ModbusException("Modbus client not initialized")
 
@@ -173,11 +136,10 @@ class SandiSolarModbusHub:
         _LOGGER.info("Modbus reconnected successfully")
 
     # -------------------------------------------------------------------------
-    # INPUT REGISTERS (READ ONLY)
+    # INPUT REGISTERS
     # -------------------------------------------------------------------------
 
     async def read_input_register(self, key: str) -> Optional[float]:
-        """Read an input register by key."""
         reg = INPUT_REGISTERS.get(key)
         if not reg:
             _LOGGER.error("Unknown input register key: %s", key)
@@ -206,11 +168,10 @@ class SandiSolarModbusHub:
         return value
 
     # -------------------------------------------------------------------------
-    # HOLDING REGISTERS (READ + WRITE)
+    # HOLDING REGISTERS
     # -------------------------------------------------------------------------
 
     async def read_holding_register(self, key: str) -> Optional[float]:
-        """Read a holding register."""
         reg = HOLDING_REGISTERS.get(key)
         if not reg:
             _LOGGER.error("Unknown holding register key: %s", key)
@@ -239,7 +200,6 @@ class SandiSolarModbusHub:
         return value
 
     async def write_holding_register(self, key: str, value: float) -> bool:
-        """Write a holding register."""
         reg = HOLDING_REGISTERS.get(key)
         if not reg:
             _LOGGER.error("Unknown holding register key: %s", key)
@@ -268,11 +228,10 @@ class SandiSolarModbusHub:
         return True
 
     # -------------------------------------------------------------------------
-    # ATTRIBUTES MAPPING
+    # ATTRIBUTES
     # -------------------------------------------------------------------------
 
     def get_attributes_for(self, key: str) -> Dict[str, Any]:
-        """Return attribute set for a given sensor key."""
         attrs: Dict[str, Any] = {}
 
         for group, keys in ATTRIBUTE_GROUPS.items():
@@ -284,11 +243,10 @@ class SandiSolarModbusHub:
         return attrs
 
     # -------------------------------------------------------------------------
-    # DIAGNOSTICS – FULL REGISTER DUMP
+    # DIAGNOSTICS
     # -------------------------------------------------------------------------
 
     async def dump_all_registers(self) -> Dict[str, Any]:
-        """Return a full dump of all input + holding registers."""
         dump: Dict[str, Any] = {}
 
         for key in INPUT_REGISTERS:
@@ -307,11 +265,10 @@ class SandiSolarModbusHub:
         return dump
 
     # -------------------------------------------------------------------------
-    # CLOSE CONNECTION
+    # CLOSE
     # -------------------------------------------------------------------------
 
     async def close(self) -> None:
-        """Close Modbus connection."""
         if self._client:
             await self._client.close()
             _LOGGER.info("SANDISOLAR Modbus RTU connection closed")

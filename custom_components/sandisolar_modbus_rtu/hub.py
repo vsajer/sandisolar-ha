@@ -5,6 +5,7 @@ import logging
 from typing import Any, Optional, Dict
 
 from pymodbus.client import AsyncModbusSerialClient
+from pymodbus.framer import ModbusRtuFramer
 from pymodbus.exceptions import ModbusException
 
 from homeassistant.core import HomeAssistant
@@ -85,14 +86,17 @@ class SandiSolarModbusHub:
             self.baudrate,
         )
 
+        # 🔥 Tohle je správná inicializace – 100% kompatibilní s originální HA Modbus integrací
         self._client = AsyncModbusSerialClient(
             port=self.port,
             baudrate=self.baudrate,
             bytesize=8,
             parity="N",
             stopbits=1,
-            timeout=2,
-            retries=3,
+            timeout=5,
+            message_wait_milliseconds=850,
+            framer=ModbusRtuFramer,
+            delay=0,
         )
 
         connected = await self._client.connect()
@@ -260,7 +264,6 @@ class SandiSolarModbusHub:
             _LOGGER.error("Modbus write error for %s", key)
             return False
 
-        # po zápisu si můžeme uložit i novou hodnotu
         self._cache[key] = value
         return True
 

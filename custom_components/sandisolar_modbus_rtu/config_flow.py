@@ -77,7 +77,6 @@ class SandiSolarConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors={"base": "cannot_connect"},
             )
 
-        # Create entry
         return self.async_create_entry(
             title=user_input["name"],
             data=user_input,

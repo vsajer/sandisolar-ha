@@ -1,0 +1,4 @@
+dump_registers:
+  name: Dump all Modbus registers
+  description: Read and log all available SANDISOLAR Modbus RTU registers for diagnostics.
+  fields: {}

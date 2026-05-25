@@ -1,20 +1,45 @@
 {
+  "title": "SANDISOLAR Modbus RTU",
+  "flow_title": "SANDISOLAR Modbus RTU: {name}",
+
   "config": {
     "step": {
       "user": {
         "title": "Configure SANDISOLAR Modbus RTU",
-        "description": "Connect your SANDISOLAR SD-PRO-EU inverter via Modbus RTU",
+        "description": "Connect your SANDISOLAR SD-PRO-EU inverter via Modbus RTU.",
         "data": {
           "name": "Device Name",
           "port": "Serial Port (e.g., /dev/ttyUSB0 or COM3)",
           "baudrate": "Baud Rate (typically 9600)",
           "slave_id": "Modbus Slave ID (typically 1)",
-          "update_interval": "Update Interval in seconds (5-300)"
+          "update_interval": "Update Interval in seconds (5–300)"
         }
       }
     },
     "error": {
       "cannot_connect": "Failed to connect to the device. Check port, baud rate, and slave ID."
+    },
+    "abort": {
+      "already_configured": "This device is already configured."
+    }
+  },
+
+  "options": {
+    "step": {
+      "init": {
+        "title": "SANDISOLAR Integration Settings",
+        "description": "Adjust optional integration parameters.",
+        "data": {
+          "use_czech_names": "Use Czech entity names"
+        }
+      }
+    }
+  },
+
+  "services": {
+    "dump_registers": {
+      "name": "Dump all Modbus registers",
+      "description": "Reads and logs all available Modbus registers for diagnostics."
     }
   }
 }

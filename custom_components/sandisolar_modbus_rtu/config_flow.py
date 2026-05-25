@@ -25,6 +25,13 @@ async def async_list_serial_ports(hass: HomeAssistant) -> list[str]:
         return ["/dev/ttyUSB0"]
 
 
+class DummyEntry:
+    """Minimal fake entry for connection test."""
+    def __init__(self, data):
+        self.data = data
+        self.title = data.get("name", "SANDISOLAR")
+
+
 class SandiSolarConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for SANDISOLAR Modbus RTU."""
 
@@ -50,19 +57,8 @@ class SandiSolarConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Test connection
         try:
-            hub = SandiSolarModbusHub(hass, config_entries.ConfigEntry(
-                version=1,
-                domain=DOMAIN,
-                title=user_input["name"],
-                data=user_input,
-                entry_id="test",
-                source="user",
-                minor_version=1,
-                discovery_keys=None,
-                subentries_data=None,
-                unique_id=None,
-            ))
-
+            dummy = DummyEntry(user_input)
+            hub = SandiSolarModbusHub(hass, dummy)
             await hub.async_init()
 
         except Exception as err:

@@ -54,7 +54,7 @@ class SandiSolarModbusHub:
         _LOGGER.info("Serial port opened successfully, testing Modbus communication...")
 
         try:
-            result = await self._client.read_input_registers(TEST_REGISTER, 1)
+            result = await self._client.read_input_registers(TEST_REGISTER)
         except Exception as err:
             raise ModbusException(f"Modbus test read failed: {err}") from err
 
@@ -90,7 +90,7 @@ class SandiSolarModbusHub:
         async with self._lock:
             await self._ensure_connection()
             try:
-                result = await self._client.read_input_registers(reg.address, reg.count)
+                result = await self._client.read_input_registers(reg.address)
             except Exception:
                 return None
 
@@ -110,7 +110,7 @@ class SandiSolarModbusHub:
         async with self._lock:
             await self._ensure_connection()
             try:
-                result = await self._client.read_holding_registers(reg.address, reg.count)
+                result = await self._client.read_holding_registers(reg.address)
             except Exception:
                 return None
 

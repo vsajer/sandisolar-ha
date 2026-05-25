@@ -5,7 +5,7 @@ import logging
 from typing import Any, Optional, Dict
 
 from pymodbus.client import AsyncModbusSerialClient
-from pymodbus.framer import ModbusRtuFramer
+from pymodbus.framer.rtu_framer import ModbusRtuFramer
 from pymodbus.exceptions import ModbusException
 
 from homeassistant.core import HomeAssistant
@@ -17,7 +17,7 @@ _LOGGER = logging.getLogger(__name__)
 
 DEFAULT_PORT = "/dev/ttyUSB0"
 
-# 🔥 SD-PRO-EU vždy odpoví na register 64 (PV Voltage)
+# SD-PRO-EU vždy odpoví na register 64 (PV Voltage)
 TEST_REGISTER = 64
 
 
@@ -57,7 +57,7 @@ class SandiSolarModbusHub:
 
         _LOGGER.info("Initializing SANDISOLAR Modbus RTU on %s @ %s baud", self.port, self.baudrate)
 
-        # 🔥 Tohle je správná konfigurace – identická s originální HA Modbus integrací
+        # Správná konfigurace – kompatibilní s originální HA Modbus integrací
         self._client = AsyncModbusSerialClient(
             port=self.port,
             baudrate=self.baudrate,
@@ -65,8 +65,8 @@ class SandiSolarModbusHub:
             parity="N",
             stopbits=1,
             timeout=5,
-            message_wait_milliseconds=850,
             framer=ModbusRtuFramer,
+            message_wait_milliseconds=850,
             delay=0,
         )
 

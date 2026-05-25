@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import Any, Optional
+from typing import Any, Optional, Dict
 
 from pymodbus.client import AsyncModbusSerialClient
 from pymodbus.exceptions import ModbusException
@@ -18,6 +18,36 @@ DEFAULT_PORT = "/dev/ttyUSB0"
 TEST_REGISTER = 0  # Device status register
 
 
+# Skupiny pro automatické atributy
+ATTRIBUTE_GROUPS = {
+    "pv": [
+        "pv_voltage",
+        "pv_current",
+        "pv_power",
+        "pv_status",
+    ],
+    "battery": [
+        "battery_voltage",
+        "battery_current",
+        "battery_temperature",
+        "battery_soc",
+        "battery_status",
+    ],
+    "grid": [
+        "grid_voltage",
+        "grid_frequency",
+        "grid_power",
+        "grid_status",
+    ],
+    "inverter": [
+        "inverter_status",
+        "output_load",
+        "temperature",
+        "error_code",
+    ],
+}
+
+
 class SandiSolarModbusHub:
     """Main Modbus RTU hub for SANDISOLAR."""
 
@@ -26,7 +56,6 @@ class SandiSolarModbusHub:
         self.hass = hass
         self.entry = entry
 
-        # Auto-fill port if missing
         self.port = entry.data.get("port", DEFAULT_PORT)
         self.baudrate = entry.data.get("baudrate", 9600)
         self.slave_id = entry.data.get("slave_id", 1)
@@ -35,6 +64,9 @@ class SandiSolarModbusHub:
         self._client: Optional[AsyncModbusSerialClient] = None
         self._lock = asyncio.Lock()
 
+        # Cache všech hodnot pro atributy a diagnostiku
+        self._cache: Dict[str, Any] = {}
+
     # -------------------------------------------------------------------------
     # INITIALIZATION
     # -------------------------------------------------------------------------
@@ -42,7 +74,6 @@ class SandiSolarModbusHub:
     async def async_init(self) -> None:
         """Initialize Modbus connection and test communication."""
 
-        # Check if port is already used by another integration
         if self._is_port_in_use():
             raise ModbusException(
                 f"Serial port {self.port} is already used by another integration."
@@ -83,7 +114,9 @@ class SandiSolarModbusHub:
         if result.isError():
             raise ModbusException(f"Device did not respond to test read: {result}")
 
-        _LOGGER.info("SANDISOLAR Modbus communication OK (Device Status read successful)")
+        raw = result.registers[0]
+        self._cache["device_status"] = raw
+        _LOGGER.info("SANDISOLAR Modbus communication OK (Device Status=%s)", raw)
 
     # -------------------------------------------------------------------------
     # PORT CHECK
@@ -108,17 +141,32 @@ class SandiSolarModbusHub:
         return False
 
     # -------------------------------------------------------------------------
-    # CONNECTION MANAGEMENT
+    # CONNECTION MANAGEMENT WITH EXPONENTIAL BACKOFF
     # -------------------------------------------------------------------------
 
     async def _ensure_connection(self) -> None:
-        """Reconnect if needed."""
+        """Reconnect with exponential backoff."""
         if not self._client:
             raise ModbusException("Modbus client not initialized")
 
-        if not self._client.connected:
-            _LOGGER.warning("Modbus disconnected, reconnecting...")
-            await self._client.connect()
+        if self._client.connected:
+            return
+
+        delay = 1
+        max_delay = 30
+
+        while not self._client.connected:
+            _LOGGER.warning("Modbus disconnected, reconnecting in %s seconds...", delay)
+            await asyncio.sleep(delay)
+
+            try:
+                await self._client.connect()
+            except Exception as err:
+                _LOGGER.error("Reconnect failed: %s", err)
+
+            delay = min(delay * 2, max_delay)
+
+        _LOGGER.info("Modbus reconnected successfully")
 
     # -------------------------------------------------------------------------
     # INPUT REGISTERS (READ ONLY)
@@ -149,7 +197,9 @@ class SandiSolarModbusHub:
             return None
 
         raw = result.registers[0]
-        return raw * reg.scale
+        value = raw * reg.scale
+        self._cache[key] = value
+        return value
 
     # -------------------------------------------------------------------------
     # HOLDING REGISTERS (READ + WRITE)
@@ -180,7 +230,9 @@ class SandiSolarModbusHub:
             return None
 
         raw = result.registers[0]
-        return raw * reg.scale
+        value = raw * reg.scale
+        self._cache[key] = value
+        return value
 
     async def write_holding_register(self, key: str, value: float) -> bool:
         """Write a holding register."""
@@ -208,7 +260,48 @@ class SandiSolarModbusHub:
             _LOGGER.error("Modbus write error for %s", key)
             return False
 
+        # po zápisu si můžeme uložit i novou hodnotu
+        self._cache[key] = value
         return True
+
+    # -------------------------------------------------------------------------
+    # ATTRIBUTES MAPPING
+    # -------------------------------------------------------------------------
+
+    def get_attributes_for(self, key: str) -> Dict[str, Any]:
+        """Return attribute set for a given sensor key."""
+        attrs: Dict[str, Any] = {}
+
+        for group, keys in ATTRIBUTE_GROUPS.items():
+            if key in keys:
+                for k in keys:
+                    if k in self._cache:
+                        attrs[k] = self._cache[k]
+
+        return attrs
+
+    # -------------------------------------------------------------------------
+    # DIAGNOSTICS – FULL REGISTER DUMP
+    # -------------------------------------------------------------------------
+
+    async def dump_all_registers(self) -> Dict[str, Any]:
+        """Return a full dump of all input + holding registers."""
+        dump: Dict[str, Any] = {}
+
+        for key in INPUT_REGISTERS:
+            try:
+                dump[key] = await self.read_input_register(key)
+            except Exception as err:
+                dump[key] = f"ERR: {err}"
+
+        for key in HOLDING_REGISTERS:
+            try:
+                dump[key] = await self.read_holding_register(key)
+            except Exception as err:
+                dump[key] = f"ERR: {err}"
+
+        _LOGGER.warning("FULL REGISTER DUMP:\n%s", dump)
+        return dump
 
     # -------------------------------------------------------------------------
     # CLOSE CONNECTION

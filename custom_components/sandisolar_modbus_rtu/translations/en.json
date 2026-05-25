@@ -1,0 +1,20 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configure SANDISOLAR Modbus RTU",
+        "description": "Connect your SANDISOLAR SD-PRO-EU inverter via Modbus RTU",
+        "data": {
+          "name": "Device Name",
+          "port": "Serial Port (e.g., /dev/ttyUSB0 or COM3)",
+          "baudrate": "Baud Rate (typically 9600)",
+          "slave_id": "Modbus Slave ID (typically 1)",
+          "update_interval": "Update Interval in seconds (5-300)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the device. Check port, baud rate, and slave ID."
+    }
+  }
+}

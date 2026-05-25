@@ -1,0 +1,20 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Konfigurace SANDISOLAR Modbus RTU",
+        "description": "Připojte váš měnič SANDISOLAR SD-PRO-EU přes Modbus RTU",
+        "data": {
+          "name": "Název zařízení",
+          "port": "Sériový port (např. /dev/ttyUSB0 nebo COM3)",
+          "baudrate": "Přenosová rychlost (obvykle 9600)",
+          "slave_id": "Modbus Slave ID (obvykle 1)",
+          "update_interval": "Interval aktualizace v sekundách (5-300)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Selhalo připojení k zařízení. Zkontroluj port, přenosovou rychlost a slave ID."
+    }
+  }
+}

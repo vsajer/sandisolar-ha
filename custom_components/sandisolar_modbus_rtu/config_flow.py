@@ -1,7 +1,8 @@
 """Config flow for SANDISOLAR Modbus RTU integration."""
 
 import logging
-from typing import Any, Optional
+import os
+from typing import Any, Optional, List
 
 import voluptuous as vol
 from homeassistant import config_entries
@@ -20,6 +21,25 @@ CONF_BAUDRATE = "baudrate"
 CONF_SLAVE_ID = "slave_id"
 CONF_UPDATE_INTERVAL = "update_interval"
 
+DEFAULT_PORT = "/dev/ttyUSB0"
+SERIAL_PATH = "/dev/serial/by-id/"
+
+
+def list_serial_ports() -> List[str]:
+    """Return list of available serial ports."""
+    ports = []
+
+    # Prefer stable /dev/serial/by-id paths
+    if os.path.isdir(SERIAL_PATH):
+        for item in os.listdir(SERIAL_PATH):
+            full = os.path.join(SERIAL_PATH, item)
+            ports.append(full)
+
+    # Fallback to ttyUSB0
+    ports.append(DEFAULT_PORT)
+
+    return ports
+
 
 class SandiSolarConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Config flow for SANDISOLAR."""
@@ -32,8 +52,11 @@ class SandiSolarConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle the initial step."""
         errors: dict[str, str] = {}
 
+        ports = list_serial_ports()
+
         if user_input is not None:
             try:
+                # Create temporary entry for connection test
                 hub = SandiSolarModbusHub(self.hass, self._create_mock_entry(user_input))
                 await hub.async_init()
                 await hub.close()
@@ -43,7 +66,7 @@ class SandiSolarConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             else:
                 await self.async_set_unique_id("sandisolar")
                 self._abort_if_unique_id_configured()
-                
+
                 return self.async_create_entry(
                     title=user_input[CONF_NAME],
                     data=user_input,
@@ -52,7 +75,7 @@ class SandiSolarConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         schema = vol.Schema(
             {
                 vol.Required(CONF_NAME, default="SANDISOLAR"): cv.string,
-                vol.Required(CONF_PORT): cv.string,
+                vol.Required(CONF_PORT, default=ports[0]): vol.In(ports),
                 vol.Required(CONF_BAUDRATE, default=9600): vol.In(
                     [1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200]
                 ),

@@ -10,8 +10,9 @@ from homeassistant.const import (
     UnitOfApparentPower,
     PERCENTAGE,
 )
+from homeassistant.components.sensor import SensorStateClass, SensorDeviceClass
+
 from .const import DOMAIN
-from .modbus_map import INPUT_REGISTERS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -26,6 +27,14 @@ WARNING_MAIN_MAP = {
     502: "Abnormal memory read/write",
 }
 
+WARNING_SUB_MAP = {
+    0: "OK",
+}
+
+FAULT_WORD0_MAP = {
+    0: "No fault",
+}
+
 
 async def async_setup_entry(hass, entry, async_add_entities):
     hub = hass.data[DOMAIN][entry.entry_id]
@@ -33,85 +42,317 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
     # PV
     entities += [
-        SimpleSensor(hub, "pv1_voltage", "PV Voltage 1", UnitOfElectricPotential.VOLT, "voltage", "mdi:solar-power"),
-        SimpleSensor(hub, "pv1_current", "PV Current 1", UnitOfElectricCurrent.AMPERE, "current", "mdi:solar-power"),
-        SimpleSensor(hub, "pv2_voltage", "PV Voltage 2", UnitOfElectricPotential.VOLT, "voltage", "mdi:solar-power"),
-        SimpleSensor(hub, "pv2_current", "PV Current 2", UnitOfElectricCurrent.AMPERE, "current", "mdi:solar-power"),
-        SimpleSensor(hub, "pv_power_total", "PV Power Total", UnitOfPower.WATT, "power", "mdi:solar-power"),
-        SimpleSensor(hub, "pv_energy_today", "PV Energy Today", UnitOfEnergy.KILO_WATT_HOUR, "energy", "mdi:solar-power", total=True),
-        SimpleSensor(hub, "pv_energy_total", "PV Energy Total", UnitOfEnergy.KILO_WATT_HOUR, "energy", "mdi:solar-power", total=True),
+        SimpleSensor(
+            hub,
+            "pv1_voltage",
+            "PV1_voltage",
+            UnitOfElectricPotential.VOLT,
+            SensorDeviceClass.VOLTAGE,
+            "mdi:solar-power",
+        ),
+        SimpleSensor(
+            hub,
+            "pv1_current",
+            "PV1_current",
+            UnitOfElectricCurrent.AMPERE,
+            SensorDeviceClass.CURRENT,
+            "mdi:solar-power",
+        ),
+        SimpleSensor(
+            hub,
+            "pv2_voltage",
+            "PV2_voltage",
+            UnitOfElectricPotential.VOLT,
+            SensorDeviceClass.VOLTAGE,
+            "mdi:solar-power",
+        ),
+        SimpleSensor(
+            hub,
+            "pv2_current",
+            "PV2_current",
+            UnitOfElectricCurrent.AMPERE,
+            SensorDeviceClass.CURRENT,
+            "mdi:solar-power",
+        ),
+        SimpleSensor(
+            hub,
+            "pv_power_total",
+            "PV_power_total",
+            UnitOfPower.WATT,
+            SensorDeviceClass.POWER,
+            "mdi:solar-power",
+        ),
+        EnergySensor(
+            hub,
+            "pv_energy_today",
+            "PV_energy_today",
+            UnitOfEnergy.KILO_WATT_HOUR,
+            "mdi:solar-power",
+        ),
+        EnergySensor(
+            hub,
+            "pv_energy_total",
+            "PV_energy_total",
+            UnitOfEnergy.KILO_WATT_HOUR,
+            "mdi:solar-power",
+        ),
     ]
 
     # Battery
     entities += [
-        SimpleSensor(hub, "battery_voltage", "Battery Voltage", UnitOfElectricPotential.VOLT, "voltage", "mdi:battery"),
-        SimpleSensor(hub, "battery_soc", "Battery State Of Charge", PERCENTAGE, "battery", "mdi:battery-high"),
-        SimpleSensor(hub, "battery_temp", "Battery Temperature", UnitOfTemperature.CELSIUS, "temperature", "mdi:thermometer"),
-        BatteryPowerSensor(hub, "battery_power", "Battery Power"),
-        SimpleSensor(hub, "battery_charge_energy_today", "Battery Charge Energy Today", UnitOfEnergy.KILO_WATT_HOUR, "energy", "mdi:battery-charging", total=True),
-        SimpleSensor(hub, "battery_charge_energy_total", "Battery Charge Energy Total", UnitOfEnergy.KILO_WATT_HOUR, "energy", "mdi:battery-charging", total=True),
-        SimpleSensor(hub, "battery_discharge_energy_today", "Battery Discharge Energy Today", UnitOfEnergy.KILO_WATT_HOUR, "energy", "mdi:battery-minus", total=True),
-        SimpleSensor(hub, "battery_discharge_energy_total", "Battery Discharge Energy Total", UnitOfEnergy.KILO_WATT_HOUR, "energy", "mdi:battery-minus", total=True),
+        SimpleSensor(
+            hub,
+            "battery_voltage",
+            "Battery_voltage",
+            UnitOfElectricPotential.VOLT,
+            SensorDeviceClass.VOLTAGE,
+            "mdi:battery",
+        ),
+        SimpleSensor(
+            hub,
+            "battery_soc",
+            "Battery_soc",
+            PERCENTAGE,
+            SensorDeviceClass.BATTERY,
+            "mdi:battery-high",
+        ),
+        SimpleSensor(
+            hub,
+            "battery_temp",
+            "Battery_temp",
+            UnitOfTemperature.CELSIUS,
+            SensorDeviceClass.TEMPERATURE,
+            "mdi:thermometer",
+        ),
+        SimpleSensor(
+            hub,
+            "battery_current",
+            "Battery_amp",
+            UnitOfElectricCurrent.AMPERE,
+            SensorDeviceClass.CURRENT,
+            "mdi:current-dc",
+        ),
+        BatteryPowerSensor(
+            hub,
+            "battery_power",
+            "Battery_power",
+        ),
+        EnergySensor(
+            hub,
+            "battery_charge_energy_today",
+            "Battery_charge_energy_today",
+            UnitOfEnergy.KILO_WATT_HOUR,
+            "mdi:battery-charging",
+        ),
+        EnergySensor(
+            hub,
+            "battery_charge_energy_total",
+            "Battery_charge_energy_total",
+            UnitOfEnergy.KILO_WATT_HOUR,
+            "mdi:battery-charging",
+        ),
+        EnergySensor(
+            hub,
+            "battery_discharge_energy_today",
+            "Battery_discharge_energy_today",
+            UnitOfEnergy.KILO_WATT_HOUR,
+            "mdi:battery-minus",
+        ),
+        EnergySensor(
+            hub,
+            "battery_discharge_energy_total",
+            "Battery_discharge_energy_total",
+            UnitOfEnergy.KILO_WATT_HOUR,
+            "mdi:battery-minus",
+        ),
     ]
 
     # Grid
     entities += [
-        SimpleSensor(hub, "grid_voltage", "Grid Voltage", UnitOfElectricPotential.VOLT, "voltage", "mdi:transmission-tower"),
-        SimpleSensor(hub, "grid_current", "Grid Current", UnitOfElectricCurrent.AMPERE, "current", "mdi:transmission-tower"),
-        SimpleSensor(hub, "grid_frequency", "Grid Frequency", UnitOfFrequency.HERTZ, "frequency", "mdi:sine-wave"),
-        SimpleSensor(hub, "grid_power", "Grid Power", UnitOfPower.WATT, "power", "mdi:transmission-tower"),
-        SimpleSensor(hub, "grid_in_energy_today", "Grid In Energy Today", UnitOfEnergy.KILO_WATT_HOUR, "energy", "mdi:transmission-tower-import", total=True),
-        SimpleSensor(hub, "grid_in_energy_total", "Grid In Energy Total", UnitOfEnergy.KILO_WATT_HOUR, "energy", "mdi:transmission-tower-import", total=True),
-        SimpleSensor(hub, "grid_out_energy_today", "Grid Out Energy Today", UnitOfEnergy.KILO_WATT_HOUR, "energy", "mdi:transmission-tower-export", total=True),
-        SimpleSensor(hub, "grid_out_energy_total", "Grid Out Energy Total", UnitOfEnergy.KILO_WATT_HOUR, "energy", "mdi:transmission-tower-export", total=True),
+        SimpleSensor(
+            hub,
+            "grid_voltage",
+            "Grid_voltage",
+            UnitOfElectricPotential.VOLT,
+            SensorDeviceClass.VOLTAGE,
+            "mdi:transmission-tower",
+        ),
+        SimpleSensor(
+            hub,
+            "grid_current",
+            "Grid_current",
+            UnitOfElectricCurrent.AMPERE,
+            SensorDeviceClass.CURRENT,
+            "mdi:transmission-tower",
+        ),
+        SimpleSensor(
+            hub,
+            "grid_frequency",
+            "Grid_frequency",
+            UnitOfFrequency.HERTZ,
+            SensorDeviceClass.FREQUENCY,
+            "mdi:sine-wave",
+        ),
+        SimpleSensor(
+            hub,
+            "grid_power",
+            "Grid_power",
+            UnitOfPower.WATT,
+            SensorDeviceClass.POWER,
+            "mdi:transmission-tower",
+        ),
+        EnergySensor(
+            hub,
+            "grid_in_energy_today",
+            "Grid_in_energy_today",
+            UnitOfEnergy.KILO_WATT_HOUR,
+            "mdi:transmission-tower-import",
+        ),
+        EnergySensor(
+            hub,
+            "grid_in_energy_total",
+            "Grid_in_energy_total",
+            UnitOfEnergy.KILO_WATT_HOUR,
+            "mdi:transmission-tower-import",
+        ),
+        EnergySensor(
+            hub,
+            "grid_out_energy_today",
+            "Grid_out_energy_today",
+            UnitOfEnergy.KILO_WATT_HOUR,
+            "mdi:transmission-tower-export",
+        ),
+        EnergySensor(
+            hub,
+            "grid_out_energy_total",
+            "Grid_out_energy_total",
+            UnitOfEnergy.KILO_WATT_HOUR,
+            "mdi:transmission-tower-export",
+        ),
     ]
 
     # EPS
     entities += [
-        SimpleSensor(hub, "eps_voltage", "EPS Voltage", UnitOfElectricPotential.VOLT, "voltage", "mdi:home-lightning-bolt"),
-        SimpleSensor(hub, "eps_current", "EPS Current", UnitOfElectricCurrent.AMPERE, "current", "mdi:home-lightning-bolt"),
-        SimpleSensor(hub, "eps_active_power", "EPS Active Power", UnitOfPower.WATT, "power", "mdi:flash"),
-        SimpleSensor(hub, "eps_apparent_power", "EPS Apparent Power", UnitOfApparentPower.VOLT_AMPERE, None, "mdi:flash-outline"),
-        SimpleSensor(hub, "eps_energy_today", "EPS Energy Today", UnitOfEnergy.KILO_WATT_HOUR, "energy", "mdi:home-lightning-bolt", total=True),
-        SimpleSensor(hub, "eps_energy_total", "EPS Energy Total", UnitOfEnergy.KILO_WATT_HOUR, "energy", "mdi:home-lightning-bolt", total=True),
+        SimpleSensor(
+            hub,
+            "eps_voltage",
+            "EPS_voltage",
+            UnitOfElectricPotential.VOLT,
+            SensorDeviceClass.VOLTAGE,
+            "mdi:home-lightning-bolt",
+        ),
+        SimpleSensor(
+            hub,
+            "eps_current",
+            "EPS_current",
+            UnitOfElectricCurrent.AMPERE,
+            SensorDeviceClass.CURRENT,
+            "mdi:home-lightning-bolt",
+        ),
+        SimpleSensor(
+            hub,
+            "eps_active_power",
+            "EPS_active_power",
+            UnitOfPower.WATT,
+            SensorDeviceClass.POWER,
+            "mdi:flash",
+        ),
+        SimpleSensor(
+            hub,
+            "eps_apparent_power",
+            "EPS_apparent_power",
+            UnitOfApparentPower.VOLT_AMPERE,
+            None,
+            "mdi:flash-outline",
+        ),
+        EnergySensor(
+            hub,
+            "eps_energy_today",
+            "EPS_energy_today",
+            UnitOfEnergy.KILO_WATT_HOUR,
+            "mdi:home-lightning-bolt",
+        ),
+        EnergySensor(
+            hub,
+            "eps_energy_total",
+            "EPS_energy_total",
+            UnitOfEnergy.KILO_WATT_HOUR,
+            "mdi:home-lightning-bolt",
+        ),
     ]
 
     # Load
     entities += [
-        SimpleSensor(hub, "load_energy_today", "Load Energy Today", UnitOfEnergy.KILO_WATT_HOUR, "energy", "mdi:home-lightning-bolt", total=True),
-        SimpleSensor(hub, "load_energy_total", "Load Energy Total", UnitOfEnergy.KILO_WATT_HOUR, "energy", "mdi:home-lightning-bolt", total=True),
+        EnergySensor(
+            hub,
+            "load_energy_today",
+            "Load_energy_today",
+            UnitOfEnergy.KILO_WATT_HOUR,
+            "mdi:home-lightning-bolt",
+        ),
+        EnergySensor(
+            hub,
+            "load_energy_total",
+            "Load_energy_total",
+            UnitOfEnergy.KILO_WATT_HOUR,
+            "mdi:home-lightning-bolt",
+        ),
     ]
 
-    # Temperatures
+    # Inverter temperatures
     entities += [
-        SimpleSensor(hub, "inv_temp", "Inverter Temperature", UnitOfTemperature.CELSIUS, "temperature", "mdi:thermometer"),
-        SimpleSensor(hub, "boost_temp", "Boost Temperature", UnitOfTemperature.CELSIUS, "temperature", "mdi:thermometer"),
-        SimpleSensor(hub, "llc_temp", "LLC Temperature", UnitOfTemperature.CELSIUS, "temperature", "mdi:thermometer"),
-        AmbientTempSensor(hub, "ambient_temp", "Ambient Temperature", UnitOfTemperature.CELSIUS, "temperature", "mdi:thermometer"),
+        SimpleSensor(
+            hub,
+            "inv_temp",
+            "Inverter_inv_temp",
+            UnitOfTemperature.CELSIUS,
+            SensorDeviceClass.TEMPERATURE,
+            "mdi:thermometer",
+        ),
+        SimpleSensor(
+            hub,
+            "boost_temp",
+            "Inverter_boost_temp",
+            UnitOfTemperature.CELSIUS,
+            SensorDeviceClass.TEMPERATURE,
+            "mdi:thermometer",
+        ),
+        SimpleSensor(
+            hub,
+            "llc_temp",
+            "Inverter_llc_temp",
+            UnitOfTemperature.CELSIUS,
+            SensorDeviceClass.TEMPERATURE,
+            "mdi:thermometer",
+        ),
+        AmbientTempSensor(
+            hub,
+            "ambient_temp",
+            "Inverter_ambient_temp",
+            UnitOfTemperature.CELSIUS,
+            SensorDeviceClass.TEMPERATURE,
+            "mdi:thermometer",
+        ),
     ]
 
     # Faults & warnings
     entities += [
-        FaultSensor(hub, "fault_word0", "Fault Word 0"),
-        WarningMainSensor(hub, "warning_main", "Warning Main"),
-        WarningSubSensor(hub, "warning_sub", "Warning Sub"),
+        FaultSensor(hub, "fault_word0", "Fault_word0"),
+        WarningMainSensor(hub, "warning_main", "Warning_main"),
+        WarningSubSensor(hub, "warning_sub", "Warning_sub"),
     ]
 
     async_add_entities(entities)
 
 
-# -------------------------------------------------------------------
-# BASE SENSOR CLASS
-# -------------------------------------------------------------------
-
 class BaseSandiSensor(SensorEntity):
     _attr_has_entity_name = True
 
-    def __init__(self, hub, key, name):
+    def __init__(self, hub, key, name: str):
         self._hub = hub
         self._key = key
         self._attr_name = name
-        self._attr_unique_id = f"sandisolar_sensor_{key}"
+        self._attr_unique_id = f"sandisolar_sensor_{name}"
 
     @property
     def device_info(self):
@@ -123,30 +364,49 @@ class BaseSandiSensor(SensorEntity):
         }
 
 
-# -------------------------------------------------------------------
-# SIMPLE SENSOR
-# -------------------------------------------------------------------
-
 class SimpleSensor(BaseSandiSensor):
-    def __init__(self, hub, key, name, unit, device_class, icon, total=False):
+    def __init__(self, hub, key, name, unit, device_class, icon):
         super().__init__(hub, key, name)
         self._attr_native_unit_of_measurement = unit
         self._attr_device_class = device_class
         self._attr_icon = icon
-        if total:
-            self._attr_state_class = "total_increasing"
 
     async def async_update(self):
         self._attr_native_value = await self._hub.read_input_register(self._key)
 
 
-# -------------------------------------------------------------------
-# BATTERY POWER SENSOR
-# -------------------------------------------------------------------
+class EnergySensor(BaseSandiSensor):
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_device_class = SensorDeviceClass.ENERGY
+
+    def __init__(self, hub, key, name, unit, icon):
+        super().__init__(hub, key, name)
+        self._attr_native_unit_of_measurement = unit
+        self._attr_icon = icon
+        self._last_value = None
+
+    async def async_update(self):
+        val = await self._hub.read_input_register(self._key)
+        if val is None:
+            return
+
+        if self._last_value is not None and val < self._last_value:
+            _LOGGER.debug(
+                "EnergySensor %s: new value %.3f < last value %.3f, keeping last",
+                self._key,
+                val,
+                self._last_value,
+            )
+            val = self._last_value
+
+        self._last_value = val
+        self._attr_native_value = val
+
 
 class BatteryPowerSensor(BaseSandiSensor):
     _attr_icon = "mdi:battery-sync"
     _attr_native_unit_of_measurement = UnitOfPower.WATT
+    _attr_device_class = SensorDeviceClass.POWER
 
     async def async_update(self):
         discharge = await self._hub.read_input_register("battery_discharge_power")
@@ -159,19 +419,11 @@ class BatteryPowerSensor(BaseSandiSensor):
         self._attr_native_value = discharge - charge
 
 
-# -------------------------------------------------------------------
-# AMBIENT TEMP SENSOR
-# -------------------------------------------------------------------
-
 class AmbientTempSensor(SimpleSensor):
     async def async_update(self):
         val = await self._hub.read_input_register(self._key)
         self._attr_native_value = None if val == 0 else val
 
-
-# -------------------------------------------------------------------
-# FAULT SENSOR
-# -------------------------------------------------------------------
 
 class FaultSensor(BaseSandiSensor):
     _attr_icon = "mdi:alert-circle"
@@ -180,14 +432,10 @@ class FaultSensor(BaseSandiSensor):
         val = await self._hub.read_input_register(self._key)
         self._attr_native_value = val
         self._attr_extra_state_attributes = {
-            "type": "bitmask",
             "raw_value": val,
+            "message": FAULT_WORD0_MAP.get(val, "Unknown fault code"),
         }
 
-
-# -------------------------------------------------------------------
-# WARNING MAIN SENSOR
-# -------------------------------------------------------------------
 
 class WarningMainSensor(BaseSandiSensor):
     _attr_icon = "mdi:alert"
@@ -196,13 +444,9 @@ class WarningMainSensor(BaseSandiSensor):
         val = await self._hub.read_input_register(self._key)
         self._attr_native_value = val
         self._attr_extra_state_attributes = {
-            "message": WARNING_MAIN_MAP.get(val, "Unknown"),
+            "message": WARNING_MAIN_MAP.get(val, "Unknown warning code"),
         }
 
-
-# -------------------------------------------------------------------
-# WARNING SUB SENSOR
-# -------------------------------------------------------------------
 
 class WarningSubSensor(BaseSandiSensor):
     _attr_icon = "mdi:alert"
@@ -211,5 +455,5 @@ class WarningSubSensor(BaseSandiSensor):
         val = await self._hub.read_input_register(self._key)
         self._attr_native_value = val
         self._attr_extra_state_attributes = {
-            "message": "Sub-warning code",
+            "message": WARNING_SUB_MAP.get(val, "Unknown sub-warning code"),
         }

@@ -5,6 +5,7 @@ from typing import Optional, Dict, Any
 from pymodbus.client import AsyncModbusSerialClient
 from pymodbus.exceptions import ModbusException
 
+
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 

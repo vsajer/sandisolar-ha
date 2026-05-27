@@ -3,10 +3,8 @@
   "name": "SANDISOLAR SD-PRO-EU Modbus RTU",
   "version": "1.0.0",
   "config_flow": true,
-  "documentation": "https://github.com/vlada/sandisolar_modbus_rtu",
-  "issue_tracker": "https://github.com/vlada/sandisolar_modbus_rtu/issues",
-  "requirements": ["pymodbus==3.11.2"],
+  "requirements": [],
   "dependencies": [],
-  "codeowners": ["@vladan"],
+  "codeowners": [],
   "iot_class": "local_polling"
 }

@@ -1,130 +1,83 @@
 import asyncio
 import logging
-from typing import Optional, Dict, Any
-
 from pymodbus.client import AsyncModbusSerialClient
-from pymodbus.exceptions import ModbusException
-
-from homeassistant.core import HomeAssistant
-from homeassistant.config_entries import ConfigEntry
-
-from .modbus_map import INPUT_REGISTERS, HOLDING_REGISTERS
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class SandiSolarModbusHub:
-    """Modbus RTU hub for SANDISOLAR SD-PRO-EU using pymodbus 4.x."""
+class SandiSolarHub:
+    def __init__(self, port, baudrate, parity, stopbits, bytesize, slave_id):
+        self._port = port
+        self._baudrate = baudrate
+        self._parity = parity
+        self._stopbits = stopbits
+        self._bytesize = bytesize
+        self._slave_id = slave_id
 
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
-        self.hass = hass
-        self.entry = entry
-
-        self.port = entry.data["port"]
-        self.baudrate = entry.data["baudrate"]
-        self.slave = entry.data["slave"]
-        self.update_interval = entry.data["update_interval"]
-
-        self._client: Optional[AsyncModbusSerialClient] = None
+        self._client = None
         self._lock = asyncio.Lock()
-        self._cache: Dict[str, Any] = {}
 
-    async def async_init(self) -> None:
-        self._client = AsyncModbusSerialClient(
-            port=self.port,
-            baudrate=self.baudrate,
-            bytesize=8,
-            parity="N",
-            stopbits=1,
-            timeout=3,
-        )
+    async def connect(self):
+        """Initialize Modbus RTU client."""
+        try:
+            self._client = AsyncModbusSerialClient(
+                port=self._port,
+                baudrate=self._baudrate,
+                parity=self._parity,
+                stopbits=self._stopbits,
+                bytesize=self._bytesize,
+                timeout=2,
+            )
 
-        connected = await self._client.connect()
-        if not connected:
-            raise ModbusException("Cannot open serial port")
+            connection = await self._client.connect()
 
-        _LOGGER.info("SANDISOLAR: Connected to %s", self.port)
-
-    async def _ensure_connection(self):
-        if not self._client.connected:
-            await self._client.connect()
-
-    async def read_input_register(self, key: str):
-        reg = INPUT_REGISTERS[key]
-
-        async with self._lock:
-            await self._ensure_connection()
-            try:
-                self._client.unit_id = self.slave
-                result = await self._client.read_input_registers(
-                    address=reg.address,
-                    count=reg.count,
-                )
-            except Exception as e:
-                _LOGGER.error("Read error %s: %s", key, e)
-                return None
-
-        if result.isError():
-            return None
-
-        raw = (
-            (result.registers[0] << 16) | result.registers[1]
-            if reg.count == 2
-            else result.registers[0]
-        )
-
-        if reg.signed:
-            bits = 32 if reg.count == 2 else 16
-            max_val = 1 << (bits - 1)
-            if raw >= max_val:
-                raw -= 1 << bits
-
-        value = raw * reg.scale
-        self._cache[key] = value
-        return value
-
-    async def read_holding_register(self, key: str):
-        reg = HOLDING_REGISTERS[key]
-
-        async with self._lock:
-            await self._ensure_connection()
-            try:
-                self._client.unit_id = self.slave
-                result = await self._client.read_holding_registers(
-                    address=reg.address,
-                    count=reg.count,
-                )
-            except Exception as e:
-                _LOGGER.error("Holding read error %s: %s", key, e)
-                return None
-
-        if result.isError():
-            return None
-
-        raw = result.registers[0]
-        value = raw * reg.scale
-        self._cache[key] = value
-        return value
-
-    async def write_holding_register(self, key: str, value: float):
-        reg = HOLDING_REGISTERS[key]
-        raw = int(value / reg.scale)
-
-        async with self._lock:
-            await self._ensure_connection()
-            try:
-                self._client.unit_id = self.slave
-                result = await self._client.write_register(
-                    address=reg.address,
-                    value=raw,
-                )
-            except Exception as e:
-                _LOGGER.error("Write error %s: %s", key, e)
+            if not connection:
+                _LOGGER.error("Failed to connect to Modbus device on %s", self._port)
+                self._client = None
                 return False
 
-        return not result.isError()
+            _LOGGER.info("Connected to Modbus device on %s", self._port)
+            return True
+
+        except Exception as e:
+            _LOGGER.error("Error connecting Modbus client: %s", e)
+            self._client = None
+            return False
 
     async def close(self):
-        if self._client:
+        """Safely close Modbus client."""
+        if self._client is None:
+            _LOGGER.debug("Modbus client already None, skipping close()")
+            return
+
+        try:
             await self._client.close()
-            self._client = None
+            _LOGGER.info("Modbus client closed")
+        except Exception as e:
+            _LOGGER.warning("Error closing Modbus client: %s", e)
+
+        self._client = None
+
+    async def read_input_register(self, register):
+        """Thread‑safe Modbus read."""
+        async with self._lock:
+            if self._client is None:
+                _LOGGER.warning("Modbus client not connected")
+                return None
+
+            try:
+                result = await self._client.read_input_registers(
+                    address=register,
+                    count=1,
+                    slave=self._slave_id,
+                )
+
+                if result.isError():
+                    _LOGGER.warning("Modbus error reading register %s: %s", register, result)
+                    return None
+
+                return result.registers[0]
+
+            except Exception as e:
+                _LOGGER.error("Exception reading register %s: %s", register, e)
+                return None

@@ -6,16 +6,27 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class SandiSolarHub:
-    def __init__(self, port, baudrate, parity, stopbits, bytesize, slave_id):
-        self._port = port
-        self._baudrate = baudrate
-        self._parity = parity
-        self._stopbits = stopbits
-        self._bytesize = bytesize
-        self._slave_id = slave_id
+    def __init__(self, hass, entry):
+        self.hass = hass
+        self.entry = entry
+
+        # Načtení konfigurace z config_flow
+        self._port = entry.data.get("port")
+        self._baudrate = entry.data.get("baudrate", 9600)
+        self._slave_id = entry.data.get("slave", 1)
+        self._update_interval = entry.data.get("update_interval", 10)
+
+        # Fixní parametry podle protokolu
+        self._parity = "N"
+        self._stopbits = 1
+        self._bytesize = 8
 
         self._client = None
         self._lock = asyncio.Lock()
+
+    async def async_init(self):
+        """Initialize Modbus connection."""
+        return await self.connect()
 
     async def connect(self):
         """Initialize Modbus RTU client."""
@@ -47,7 +58,6 @@ class SandiSolarHub:
     async def close(self):
         """Safely close Modbus client."""
         if self._client is None:
-            _LOGGER.debug("Modbus client already None, skipping close()")
             return
 
         try:

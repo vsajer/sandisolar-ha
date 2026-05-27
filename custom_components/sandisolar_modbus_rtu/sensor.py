@@ -112,14 +112,14 @@ async def async_setup_entry(hass, entry, async_add_entities):
         SimpleSensor(hub, "eps_voltage", "EPS_voltage",
                      UnitOfElectricPotential.VOLT, SensorDeviceClass.VOLTAGE, "mdi:home-lightning-bolt"),
 
-        EPSCurrentSensor(hub, "eps_current", "EPS_current",
-                         UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT, "mdi:home-lightning-bolt"),
+        SimpleSensor(hub, "eps_current", "EPS_current",
+                     UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT, "mdi:home-lightning-bolt"),
 
         SimpleSensor(hub, "eps_active_power", "EPS_active_power",
                      UnitOfPower.WATT, SensorDeviceClass.POWER, "mdi:flash"),
 
-        EPSApparentPowerSensor(hub, "eps_apparent_power", "EPS_apparent_power",
-                               UnitOfApparentPower.VOLT_AMPERE, None, "mdi:flash-outline"),
+        SimpleSensor(hub, "eps_apparent_power", "EPS_apparent_power",
+                     UnitOfApparentPower.VOLT_AMPERE, None, "mdi:flash-outline"),
 
         EnergySensor(hub, "eps_energy_today", "EPS_energy_today",
                      UnitOfEnergy.KILO_WATT_HOUR, "mdi:home-lightning-bolt"),
@@ -164,40 +164,60 @@ class SimpleSensor(BaseSandiSensor):
         self._attr_icon = icon
 
     async def async_update(self):
-        self._attr_native_value = await self._hub.read_input_register(self._key)
+        val = await self._hub.read_input_register(self._key)
 
+        if val is None:
+            self._attr_native_value = None
+            return
 
+        try:
+            val = float(val)
+        except:
+            self._attr_native_value = None
+            return
+
+        # jednotné 1 desetinné místo
+        self._attr_native_value = float(f"{val:.1f}")
 class BatteryVoltageSensor(SimpleSensor):
     async def async_update(self):
         val = await self._hub.read_input_register(self._key)
 
-        if val is None or val == 0:
-            self._attr_native_value = None
-            return
-
-        self._attr_native_value = round(val, 1)
-
-
-class EPSCurrentSensor(SimpleSensor):
-    async def async_update(self):
-        val = await self._hub.read_input_register(self._key)
-
         if val is None:
             self._attr_native_value = None
             return
 
-        self._attr_native_value = round(val, 1)
-
-
-class EPSApparentPowerSensor(SimpleSensor):
-    async def async_update(self):
-        val = await self._hub.read_input_register(self._key)
-
-        if val is None:
+        try:
+            val = float(val)
+        except:
             self._attr_native_value = None
             return
 
-        self._attr_native_value = int(val)
+        # 1 desetinné místo
+        self._attr_native_value = float(f"{val:.1f}")
+
+
+class BatteryPowerSensor(BaseSandiSensor):
+    _attr_icon = "mdi:battery-sync"
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
+    _attr_device_class = SensorDeviceClass.POWER
+
+    async def async_update(self):
+        discharge = await self._hub.read_input_register("battery_discharge_power")
+        charge = await self._hub.read_input_register("battery_charge_power")
+
+        if discharge is None or charge is None:
+            self._attr_native_value = None
+            return
+
+        try:
+            discharge = float(discharge)
+            charge = float(charge)
+        except:
+            self._attr_native_value = None
+            return
+
+        # výkon bez desetinných míst
+        self._attr_native_value = int(discharge - charge)
 
 
 class EnergySensor(BaseSandiSensor):
@@ -215,31 +235,18 @@ class EnergySensor(BaseSandiSensor):
         if val is None:
             return
 
+        try:
+            val = float(val)
+        except:
+            return
+
         if self._last_value is not None and val < self._last_value:
             val = self._last_value
 
         self._last_value = val
-        self._attr_native_value = round(val, 1)
-class BatteryPowerSensor(BaseSandiSensor):
-    _attr_icon = "mdi:battery-sync"
-    _attr_native_unit_of_measurement = UnitOfPower.WATT
-    _attr_device_class = SensorDeviceClass.POWER
 
-    async def async_update(self):
-        discharge = await self._hub.read_input_register("battery_discharge_power")
-        charge = await self._hub.read_input_register("battery_charge_power")
-
-        if discharge is None or charge is None:
-            self._attr_native_value = None
-            return
-
-        self._attr_native_value = discharge - charge
-
-
-class AmbientTempSensor(SimpleSensor):
-    async def async_update(self):
-        val = await self._hub.read_input_register(self._key)
-        self._attr_native_value = None if val == 0 else val
+        # energie vždy 1 desetinné místo
+        self._attr_native_value = float(f"{val:.1f}")
 
 
 class FaultSensor(BaseSandiSensor):
@@ -247,10 +254,20 @@ class FaultSensor(BaseSandiSensor):
 
     async def async_update(self):
         val = await self._hub.read_input_register(self._key)
-        self._attr_native_value = val
+
+        if val is None:
+            self._attr_native_value = None
+            return
+
+        try:
+            intval = int(val)
+        except:
+            intval = None
+
+        self._attr_native_value = intval
         self._attr_extra_state_attributes = {
-            "raw_value": val,
-            "message": FAULT_WORD0_MAP.get(val, "Unknown fault code"),
+            "raw_value": intval,
+            "message": FAULT_WORD0_MAP.get(intval, "Unknown fault code"),
         }
 
 
@@ -259,9 +276,19 @@ class WarningMainSensor(BaseSandiSensor):
 
     async def async_update(self):
         val = await self._hub.read_input_register(self._key)
-        self._attr_native_value = val
+
+        if val is None:
+            self._attr_native_value = None
+            return
+
+        try:
+            intval = int(val)
+        except:
+            intval = None
+
+        self._attr_native_value = intval
         self._attr_extra_state_attributes = {
-            "message": WARNING_MAIN_MAP.get(val, "Unknown warning code"),
+            "message": WARNING_MAIN_MAP.get(intval, "Unknown warning code"),
         }
 
 
@@ -270,7 +297,17 @@ class WarningSubSensor(BaseSandiSensor):
 
     async def async_update(self):
         val = await self._hub.read_input_register(self._key)
-        self._attr_native_value = val
+
+        if val is None:
+            self._attr_native_value = None
+            return
+
+        try:
+            intval = int(val)
+        except:
+            intval = None
+
+        self._attr_native_value = intval
         self._attr_extra_state_attributes = {
-            "message": WARNING_SUB_MAP.get(val, "Unknown sub-warning code"),
+            "message": WARNING_SUB_MAP.get(intval, "Unknown sub-warning code"),
         }

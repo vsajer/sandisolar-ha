@@ -5,7 +5,6 @@ from typing import Optional, Dict, Any
 from pymodbus.client import AsyncModbusSerialClient
 from pymodbus.exceptions import ModbusException
 
-
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 
@@ -15,7 +14,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class SandiSolarModbusHub:
-    """Modbus RTU hub for SANDISOLAR SD-PRO-EU using pymodbus 4.0.x."""
+    """Modbus RTU hub for SANDISOLAR SD-PRO-EU using pymodbus 4.x."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self.hass = hass
@@ -31,7 +30,6 @@ class SandiSolarModbusHub:
         self._cache: Dict[str, Any] = {}
 
     async def async_init(self) -> None:
-        """Initialize Modbus client."""
         self._client = AsyncModbusSerialClient(
             port=self.port,
             baudrate=self.baudrate,
@@ -52,16 +50,12 @@ class SandiSolarModbusHub:
             await self._client.connect()
 
     async def read_input_register(self, key: str):
-        """Read input register using pymodbus 4.0 API."""
         reg = INPUT_REGISTERS[key]
 
         async with self._lock:
             await self._ensure_connection()
-
             try:
-                # pymodbus 4.0 → slave address is set on client
                 self._client.unit_id = self.slave
-
                 result = await self._client.read_input_registers(
                     address=reg.address,
                     count=reg.count,
@@ -90,15 +84,12 @@ class SandiSolarModbusHub:
         return value
 
     async def read_holding_register(self, key: str):
-        """Read holding register using pymodbus 4.0 API."""
         reg = HOLDING_REGISTERS[key]
 
         async with self._lock:
             await self._ensure_connection()
-
             try:
                 self._client.unit_id = self.slave
-
                 result = await self._client.read_holding_registers(
                     address=reg.address,
                     count=reg.count,
@@ -116,16 +107,13 @@ class SandiSolarModbusHub:
         return value
 
     async def write_holding_register(self, key: str, value: float):
-        """Write holding register using pymodbus 4.0 API."""
         reg = HOLDING_REGISTERS[key]
         raw = int(value / reg.scale)
 
         async with self._lock:
             await self._ensure_connection()
-
             try:
                 self._client.unit_id = self.slave
-
                 result = await self._client.write_register(
                     address=reg.address,
                     value=raw,

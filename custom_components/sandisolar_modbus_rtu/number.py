@@ -13,7 +13,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     entities = [
         SandiSolarNumber(
             hub,
-            "charge_limit",
+            300,   # Modbus register
             "Charge Current Limit",
             UnitOfElectricCurrent.AMPERE,
             0,
@@ -22,7 +22,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         ),
         SandiSolarNumber(
             hub,
-            "discharge_limit",
+            301,   # Modbus register
             "Discharge Current Limit",
             UnitOfElectricCurrent.AMPERE,
             0,
@@ -38,12 +38,12 @@ class SandiSolarNumber(NumberEntity):
     _attr_has_entity_name = True
     _attr_mode = "slider"
 
-    def __init__(self, hub, key, name, unit, min_value, max_value, icon):
+    def __init__(self, hub, register, name, unit, min_value, max_value, icon):
         self._hub = hub
-        self._key = key
+        self._register = register
 
         self._attr_name = name
-        self._attr_unique_id = f"sandisolar_number_{key}"
+        self._attr_unique_id = f"sandisolar_number_{register}"
         self._attr_native_unit_of_measurement = unit
         self._attr_native_min_value = min_value
         self._attr_native_max_value = max_value
@@ -60,10 +60,10 @@ class SandiSolarNumber(NumberEntity):
 
     @property
     def native_value(self):
-        return self._hub._cache.get(self._key)
+        return self._hub._cache.get(self._register)
 
     async def async_update(self):
-        await self._hub.read_holding_register(self._key)
+        await self._hub.read_holding_register(self._register)
 
     async def async_set_native_value(self, value: float):
-        await self._hub.write_holding_register(self._key, value)
+        await self._hub.write_holding_register(self._register, int(value))

@@ -85,6 +85,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         EnergySensor(hub, "battery_discharge_energy_total", "Battery_discharge_energy_total",
                      UnitOfEnergy.KILO_WATT_HOUR, "mdi:battery-minus"),
     ]
+
     # Grid
     entities += [
         SimpleSensor(hub, "grid_voltage", "Grid_voltage",
@@ -127,11 +128,16 @@ async def async_setup_entry(hass, entry, async_add_entities):
                      UnitOfEnergy.KILO_WATT_HOUR, "mdi:home-lightning-bolt"),
     ]
 
-    # Faults & warnings
+    # Faults & warnings (číslo + textové entity)
     entities += [
         FaultSensor(hub, "fault_word0", "Fault_word0"),
+        FaultTextSensor(hub, "fault_word0_text", "Fault_word0_text"),
+
         WarningMainSensor(hub, "warning_main", "Warning_main"),
+        WarningMainTextSensor(hub, "warning_main_text", "Warning_main_text"),
+
         WarningSubSensor(hub, "warning_sub", "Warning_sub"),
+        WarningSubTextSensor(hub, "warning_sub_text", "Warning_sub_text"),
     ]
 
     async_add_entities(entities)
@@ -176,8 +182,9 @@ class SimpleSensor(BaseSandiSensor):
             self._attr_native_value = None
             return
 
-        # jednotné 1 desetinné místo
         self._attr_native_value = float(f"{val:.1f}")
+
+
 class BatteryVoltageSensor(SimpleSensor):
     async def async_update(self):
         val = await self._hub.read_input_register(self._key)
@@ -192,7 +199,6 @@ class BatteryVoltageSensor(SimpleSensor):
             self._attr_native_value = None
             return
 
-        # 1 desetinné místo
         self._attr_native_value = float(f"{val:.1f}")
 
 
@@ -216,7 +222,6 @@ class BatteryPowerSensor(BaseSandiSensor):
             self._attr_native_value = None
             return
 
-        # výkon bez desetinných míst
         self._attr_native_value = int(discharge - charge)
 
 
@@ -244,8 +249,6 @@ class EnergySensor(BaseSandiSensor):
             val = self._last_value
 
         self._last_value = val
-
-        # energie vždy 1 desetinné místo
         self._attr_native_value = float(f"{val:.1f}")
 
 
@@ -257,12 +260,10 @@ class FaultSensor(BaseSandiSensor):
 
         if val is None:
             self._attr_native_value = None
+            self._attr_extra_state_attributes = {"message": "No data"}
             return
 
-        try:
-            intval = int(val)
-        except:
-            intval = None
+        intval = int(val)
 
         self._attr_native_value = intval
         self._attr_extra_state_attributes = {
@@ -279,12 +280,10 @@ class WarningMainSensor(BaseSandiSensor):
 
         if val is None:
             self._attr_native_value = None
+            self._attr_extra_state_attributes = {"message": "No data"}
             return
 
-        try:
-            intval = int(val)
-        except:
-            intval = None
+        intval = int(val)
 
         self._attr_native_value = intval
         self._attr_extra_state_attributes = {
@@ -300,14 +299,56 @@ class WarningSubSensor(BaseSandiSensor):
 
         if val is None:
             self._attr_native_value = None
+            self._attr_extra_state_attributes = {"message": "No data"}
             return
 
-        try:
-            intval = int(val)
-        except:
-            intval = None
+        intval = int(val)
 
         self._attr_native_value = intval
         self._attr_extra_state_attributes = {
             "message": WARNING_SUB_MAP.get(intval, "Unknown sub-warning code"),
         }
+
+
+# TEXTOVÉ ENTITY
+
+class FaultTextSensor(BaseSandiSensor):
+    _attr_icon = "mdi:alert-circle-outline"
+
+    async def async_update(self):
+        val = await self._hub.read_input_register("fault_word0")
+
+        if val is None:
+            self._attr_native_value = "No data"
+            return
+
+        intval = int(val)
+        self._attr_native_value = FAULT_WORD0_MAP.get(intval, "Unknown fault code")
+
+
+class WarningMainTextSensor(BaseSandiSensor):
+    _attr_icon = "mdi:alert-outline"
+
+    async def async_update(self):
+        val = await self._hub.read_input_register("warning_main")
+
+        if val is None:
+            self._attr_native_value = "No data"
+            return
+
+        intval = int(val)
+        self._attr_native_value = WARNING_MAIN_MAP.get(intval, "Unknown warning code")
+
+
+class WarningSubTextSensor(BaseSandiSensor):
+    _attr_icon = "mdi:alert-outline"
+
+    async def async_update(self):
+        val = await self._hub.read_input_register("warning_sub")
+
+        if val is None:
+            self._attr_native_value = "No data"
+            return
+
+        intval = int(val)
+        self._attr_native_value = WARNING_SUB_MAP.get(intval, "Unknown sub-warning code")

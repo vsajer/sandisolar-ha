@@ -100,7 +100,7 @@ class SandiSolarModbusHub:
     # Register access – INPUT
     # -------------------------------------------------------------------------
 
-    async def read_input_register(self, key: str) -> Optional[float]:
+    async def read_input_register(self, key: str) -> Optional[Any]:
         """Read and decode input register defined in INPUT_REGISTERS."""
         if key not in INPUT_REGISTERS:
             _LOGGER.error("SANDISOLAR: Unknown input register key '%s'", key)
@@ -129,7 +129,22 @@ class SandiSolarModbusHub:
             _LOGGER.error("SANDISOLAR: Modbus error reading %s: %s", key, result)
             return None
 
-        # 16/32bit decode
+        # ---------------------------------------------------------------------
+        # ASCII decode (multi-register strings)
+        # ---------------------------------------------------------------------
+        if reg.count > 1 and reg.scale == 1 and not reg.signed:
+            try:
+                raw_bytes = b"".join(x.to_bytes(2, "big") for x in result.registers)
+                text = raw_bytes.decode("ascii", errors="ignore").strip("\x00").strip()
+                self._cache[key] = text
+                return text
+            except Exception as e:
+                _LOGGER.error("SANDISOLAR: ASCII decode error %s: %s", key, e)
+                return None
+
+        # ---------------------------------------------------------------------
+        # 16/32bit numeric decode
+        # ---------------------------------------------------------------------
         if reg.count == 2:
             raw = (result.registers[0] << 16) | result.registers[1]
             bits = 32
@@ -151,7 +166,7 @@ class SandiSolarModbusHub:
     # Register access – HOLDING (read)
     # -------------------------------------------------------------------------
 
-    async def read_holding_register(self, key: str) -> Optional[float]:
+    async def read_holding_register(self, key: str) -> Optional[Any]:
         """Read and decode holding register defined in HOLDING_REGISTERS."""
         if key not in HOLDING_REGISTERS:
             _LOGGER.error("SANDISOLAR: Unknown holding register key '%s'", key)
@@ -180,7 +195,6 @@ class SandiSolarModbusHub:
             _LOGGER.error("SANDISOLAR: Modbus error reading holding %s: %s", key, result)
             return None
 
-        # Většina holding registrů u tebe je 1x16bit → jednoduché dekódování
         raw = result.registers[0]
         value = raw * reg.scale
         self._cache[key] = value
@@ -198,7 +212,6 @@ class SandiSolarModbusHub:
 
         reg = HOLDING_REGISTERS[key]
 
-        # scale → raw
         try:
             raw = int(round(value / reg.scale))
         except Exception as e:
@@ -226,6 +239,5 @@ class SandiSolarModbusHub:
             _LOGGER.error("SANDISOLAR: Modbus error writing %s: %s", key, result)
             return False
 
-        # po úspěšném zápisu aktualizuj cache
         self._cache[key] = value
         return True

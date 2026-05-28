@@ -91,7 +91,7 @@ INPUT_REGISTERS = {
 
 HOLDING_REGISTERS = {
     # On/Off
-    "on_off": RegisterDef(0),
+    "inverter_on_off": RegisterDef(0),
 
     # EPS / BYPASS / UPS
     "eps_enable": RegisterDef(108),

@@ -17,7 +17,7 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 # =====================================================================
-#  MAPY STAVŮ PODLE OFICIÁLNÍ TABULKY
+#  MAPY STAVŮ
 # =====================================================================
 
 GRID_STATUS_MAP = {
@@ -56,9 +56,8 @@ BATTERY_STATUS_MAP = {
     3: "Idle",
 }
 
-
 # =====================================================================
-#  ZÁKLADNÍ TŘÍDA
+#  BASE CLASS
 # =====================================================================
 
 class BaseSandiSensor(SensorEntity):
@@ -78,7 +77,6 @@ class BaseSandiSensor(SensorEntity):
             "manufacturer": "SANDISOLAR",
             "model": "SD-PRO-EU 6.5K",
         }
-
 
 # =====================================================================
 #  SIMPLE SENSOR
@@ -102,7 +100,6 @@ class SimpleSensor(BaseSandiSensor):
             self._attr_native_value = int(val)
         else:
             self._attr_native_value = float(f"{val:.{self._decimals}f}")
-
 
 # =====================================================================
 #  ENERGY SENSOR
@@ -129,9 +126,8 @@ class EnergySensor(BaseSandiSensor):
         self._last_value = val
         self._attr_native_value = float(f"{val:.1f}")
 
-
 # =====================================================================
-#  SPECIÁLNÍ SENZORY
+#  SPECIAL SENSORS
 # =====================================================================
 
 class BatteryPowerSensor(BaseSandiSensor):
@@ -149,7 +145,6 @@ class BatteryPowerSensor(BaseSandiSensor):
 
         self._attr_native_value = int(charge - discharge)
 
-
 class FaultSensor(BaseSandiSensor):
     _attr_icon = "mdi:alert-circle"
 
@@ -161,7 +156,6 @@ class FaultSensor(BaseSandiSensor):
             "message": FAULT_WORD0_MAP.get(val, "Unknown fault code"),
         }
 
-
 class WarningMainSensor(BaseSandiSensor):
     _attr_icon = "mdi:alert"
 
@@ -171,7 +165,6 @@ class WarningMainSensor(BaseSandiSensor):
         self._attr_extra_state_attributes = {
             "message": WARNING_MAIN_MAP.get(val, "Unknown warning code"),
         }
-
 
 class WarningSubSensor(BaseSandiSensor):
     _attr_icon = "mdi:alert"
@@ -183,9 +176,8 @@ class WarningSubSensor(BaseSandiSensor):
             "message": WARNING_SUB_MAP.get(val, "Unknown sub-warning code"),
         }
 
-
 # =====================================================================
-#  TEXTOVÉ SENZORY
+#  TEXT SENSORS
 # =====================================================================
 
 class WarningMainTextSensor(BaseSandiSensor):
@@ -195,14 +187,12 @@ class WarningMainTextSensor(BaseSandiSensor):
         val = await self._hub.read_input_register(self._key)
         self._attr_native_value = WARNING_MAIN_MAP.get(val, "Unknown warning code")
 
-
 class WarningSubTextSensor(BaseSandiSensor):
     _attr_icon = "mdi:alert"
 
     async def async_update(self):
         val = await self._hub.read_input_register(self._key)
         self._attr_native_value = WARNING_SUB_MAP.get(val, "Unknown sub-warning code")
-
 
 class FaultWord0TextSensor(BaseSandiSensor):
     _attr_icon = "mdi:alert-circle"
@@ -211,14 +201,12 @@ class FaultWord0TextSensor(BaseSandiSensor):
         val = await self._hub.read_input_register(self._key)
         self._attr_native_value = FAULT_WORD0_MAP.get(val, "Unknown fault code")
 
-
 class BatteryStatusTextSensor(BaseSandiSensor):
     _attr_icon = "mdi:battery"
 
     async def async_update(self):
         val = await self._hub.read_input_register(self._key)
         self._attr_native_value = BATTERY_STATUS_MAP.get(val, "Unknown battery status")
-
 
 class GridStatusTextSensor(BaseSandiSensor):
     _attr_icon = "mdi:transmission-tower"
@@ -227,9 +215,8 @@ class GridStatusTextSensor(BaseSandiSensor):
         val = await self._hub.read_input_register(self._key)
         self._attr_native_value = GRID_STATUS_MAP.get(val, "Unknown grid status")
 
-
 # =====================================================================
-#  REGISTRACE VŠECH SENZORŮ
+#  SETUP ENTRY
 # =====================================================================
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -238,14 +225,14 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
     # PV
     entities += [
-        SimpleSensor(hub, 64, "PV1_voltage",
+        SimpleSensor(hub, "pv1_voltage", "PV1_voltage",
                      UnitOfElectricPotential.VOLT, SensorDeviceClass.VOLTAGE, "mdi:solar-power", decimals=1),
-        SimpleSensor(hub, 65, "PV1_current",
+        SimpleSensor(hub, "pv1_current", "PV1_current",
                      UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT, "mdi:solar-power", decimals=1),
 
-        SimpleSensor(hub, 66, "PV2_voltage",
+        SimpleSensor(hub, "pv2_voltage", "PV2_voltage",
                      UnitOfElectricPotential.VOLT, SensorDeviceClass.VOLTAGE, "mdi:solar-power", decimals=1),
-        SimpleSensor(hub, 67, "PV2_current",
+        SimpleSensor(hub, "pv2_current", "PV2_current",
                      UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT, "mdi:solar-power", decimals=1),
 
         SimpleSensor(hub, "pv_power_total", "PV_power_total",
@@ -259,16 +246,16 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
     # Battery
     entities += [
-        SimpleSensor(hub, 127, "Battery_voltage",
+        SimpleSensor(hub, "battery_voltage", "Battery_voltage",
                      UnitOfElectricPotential.VOLT, SensorDeviceClass.VOLTAGE, "mdi:battery", decimals=1),
 
-        SimpleSensor(hub, 128, "Battery_soc",
+        SimpleSensor(hub, "battery_soc", "Battery_soc",
                      PERCENTAGE, SensorDeviceClass.BATTERY, "mdi:battery-high", decimals=0),
 
-        SimpleSensor(hub, 14, "Battery_temp",
+        SimpleSensor(hub, "battery_temp", "Battery_temp",
                      UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE, "mdi:thermometer", decimals=1),
 
-        SimpleSensor(hub, 141, "Battery_current",
+        SimpleSensor(hub, "battery_current", "Battery_current",
                      UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT, "mdi:current-dc", decimals=1),
 
         BatteryPowerSensor(hub, "battery_power", "Battery_power"),
@@ -286,12 +273,13 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
     # Grid
     entities += [
-        SimpleSensor(hub, 42, "Grid_voltage",
+        SimpleSensor(hub, "grid_voltage", "Grid_voltage",
                      UnitOfElectricPotential.VOLT, SensorDeviceClass.VOLTAGE, "mdi:transmission-tower", decimals=1),
-        SimpleSensor(hub, 43, "Grid_current",
+        SimpleSensor(hub, "grid_current", "Grid_current",
                      UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT, "mdi:transmission-tower", decimals=1),
-        SimpleSensor(hub, 51, "Grid_frequency",
+        SimpleSensor(hub, "grid_frequency", "Grid_frequency",
                      UnitOfFrequency.HERTZ, SensorDeviceClass.FREQUENCY, "mdi:sine-wave", decimals=2),
+
         SimpleSensor(hub, "grid_power", "Grid_power",
                      UnitOfPower.WATT, SensorDeviceClass.POWER, "mdi:transmission-tower", decimals=0),
 
@@ -308,10 +296,10 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
     # EPS
     entities += [
-        SimpleSensor(hub, 55, "EPS_voltage",
+        SimpleSensor(hub, "eps_voltage", "EPS_voltage",
                      UnitOfElectricPotential.VOLT, SensorDeviceClass.VOLTAGE, "mdi:home-lightning-bolt", decimals=1),
 
-        SimpleSensor(hub, 56, "EPS_current",
+        SimpleSensor(hub, "eps_current", "EPS_current",
                      UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT, "mdi:home-lightning-bolt", decimals=1),
 
         SimpleSensor(hub, "eps_active_power", "EPS_active_power",
@@ -326,7 +314,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
                      UnitOfEnergy.KILO_WATT_HOUR, "mdi:home-lightning-bolt"),
     ]
 
-    # Faults & warnings + TEXTOVÉ SENZORY
+    # Faults & warnings
     entities += [
         FaultSensor(hub, "fault_word0", "Fault_word0"),
         FaultWord0TextSensor(hub, "fault_word0", "Fault_word0_text"),

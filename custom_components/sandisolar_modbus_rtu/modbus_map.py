@@ -94,9 +94,20 @@ HOLDING_REGISTERS = {
     "inverter_on_off": RegisterDef(0),
     
     # Device info
-    "device_model": RegisterDef(0, scale=1, count=2),     # ASCII
-    "device_name": RegisterDef(2, scale=1, count=2),      # ASCII
+    "device_model": RegisterDef(0, scale=1, count=2),
+    "device_name": RegisterDef(2, scale=1, count=2),
+
     "total_work_time": RegisterDef(46, scale=1, count=2),
+
+    "fw_main_version": RegisterDef(28, scale=1, count=3),
+    "fw_arm_name": RegisterDef(31, scale=1, count=2),
+    "fw_arm_version": RegisterDef(33),
+    "fw_dsp_name": RegisterDef(34, scale=1, count=2),
+    "fw_dsp1_version": RegisterDef(36),
+    "fw_dsp2_version": RegisterDef(37),
+    "fw_dsp1_debug": RegisterDef(38),
+    "fw_dsp2_debug": RegisterDef(39),
+    "fw_arm_debug": RegisterDef(40),
     
     # EPS / BYPASS / UPS
     "eps_enable": RegisterDef(108),

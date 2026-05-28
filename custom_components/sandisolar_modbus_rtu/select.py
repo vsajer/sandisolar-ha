@@ -5,7 +5,7 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 # ---------------------------------------------------------
-# OPTIONS MAPPING (value → register value)
+# OPTIONS MAPPING (label → register value)
 # ---------------------------------------------------------
 
 SOURCE_PRIORITY_OPTIONS = {
@@ -68,6 +68,8 @@ class SandiSolarSelect(SelectEntity):
         self._attr_options = list(mapping.keys())
         self._attr_icon = icon
 
+        self._state = None
+
     # -----------------------------------------------------
     # DEVICE INFO
     # -----------------------------------------------------
@@ -87,12 +89,11 @@ class SandiSolarSelect(SelectEntity):
 
     @property
     def current_option(self):
-        raw = self._hub._cache.get(self._key)
-        if raw is None:
+        if self._state is None:
             return None
 
         for label, value in self._mapping.items():
-            if value == raw:
+            if value == self._state:
                 return label
 
         return None
@@ -102,12 +103,18 @@ class SandiSolarSelect(SelectEntity):
     # -----------------------------------------------------
 
     async def async_update(self):
-        await self._hub.read_holding_register(self._key)
+        """Read holding register value."""
+        val = await self._hub.read_holding_register(self._key)
+        if val is not None:
+            self._state = int(val)
 
     # -----------------------------------------------------
     # WRITE
     # -----------------------------------------------------
 
     async def async_select_option(self, option: str):
+        """Write new value to holding register."""
         value = self._mapping[option]
         await self._hub.write_holding_register(self._key, value)
+        self._state = value
+        self.async_write_ha_state()

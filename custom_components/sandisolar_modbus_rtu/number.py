@@ -1,6 +1,6 @@
 import logging
 from homeassistant.components.number import NumberEntity
-from homeassistant.const import UnitOfElectricCurrent
+from homeassistant.const import UnitOfElectricCurrent, PERCENTAGE
 
 from .const import DOMAIN
 
@@ -11,6 +11,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
     hub = hass.data[DOMAIN][entry.entry_id]
 
     entities = [
+        # -------------------------------------------------------------
+        # Charge / Discharge Current Limits (A)
+        # -------------------------------------------------------------
         SandiSolarNumber(
             hub,
             "charge_limit",
@@ -28,6 +31,59 @@ async def async_setup_entry(hass, entry, async_add_entities):
             0,
             100,
             "mdi:battery-minus",
+        ),
+
+        # -------------------------------------------------------------
+        # End of Charge SOC (%)
+        # -------------------------------------------------------------
+        SandiSolarNumber(
+            hub,
+            "end_of_charge_soc",
+            "End of Charge SOC",
+            PERCENTAGE,
+            0,
+            100,
+            "mdi:battery-heart",
+        ),
+
+        # -------------------------------------------------------------
+        # SOC Limits (%)
+        # -------------------------------------------------------------
+        SandiSolarNumber(
+            hub,
+            "on_grid_discharge_soc",
+            "On‑Grid Discharge SOC",
+            PERCENTAGE,
+            0,
+            100,
+            "mdi:transmission-tower",
+        ),
+        SandiSolarNumber(
+            hub,
+            "off_grid_discharge_soc",
+            "Off‑Grid Discharge SOC",
+            PERCENTAGE,
+            0,
+            100,
+            "mdi:home-lightning-bolt",
+        ),
+        SandiSolarNumber(
+            hub,
+            "on_grid_recovery_soc",
+            "On‑Grid Recovery SOC",
+            PERCENTAGE,
+            0,
+            100,
+            "mdi:battery-sync",
+        ),
+        SandiSolarNumber(
+            hub,
+            "off_grid_recovery_soc",
+            "Off‑Grid Recovery SOC",
+            PERCENTAGE,
+            0,
+            100,
+            "mdi:battery-sync",
         ),
     ]
 
@@ -49,6 +105,8 @@ class SandiSolarNumber(NumberEntity):
         self._attr_native_max_value = max_value
         self._attr_icon = icon
 
+        self._state = None
+
     @property
     def device_info(self):
         return {
@@ -60,10 +118,17 @@ class SandiSolarNumber(NumberEntity):
 
     @property
     def native_value(self):
-        return self._hub._cache.get(self._key)
+        return self._state
 
     async def async_update(self):
-        await self._hub.read_holding_register(self._key)
+        """Read holding register value."""
+        val = await self._hub.read_holding_register(self._key)
+        if val is not None:
+            self._state = int(val)
 
     async def async_set_native_value(self, value: float):
-        await self._hub.write_holding_register(self._key, value)
+        """Write new value to holding register."""
+        int_value = int(value)
+        await self._hub.write_holding_register(self._key, int_value)
+        self._state = int_value
+        self.async_write_ha_state()

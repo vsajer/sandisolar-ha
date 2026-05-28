@@ -145,6 +145,10 @@ class BatteryPowerSensor(BaseSandiSensor):
 
         self._attr_native_value = int(charge - discharge)
 
+# =====================================================================
+#  TEXT SENSORS
+# =====================================================================
+
 class FaultSensor(BaseSandiSensor):
     _attr_icon = "mdi:alert-circle"
 
@@ -175,10 +179,6 @@ class WarningSubSensor(BaseSandiSensor):
         self._attr_extra_state_attributes = {
             "message": WARNING_SUB_MAP.get(val, "Unknown sub-warning code"),
         }
-
-# =====================================================================
-#  TEXT SENSORS
-# =====================================================================
 
 class WarningMainTextSensor(BaseSandiSensor):
     _attr_icon = "mdi:alert"
@@ -214,6 +214,31 @@ class GridStatusTextSensor(BaseSandiSensor):
     async def async_update(self):
         val = await self._hub.read_input_register(self._key)
         self._attr_native_value = GRID_STATUS_MAP.get(val, "Unknown grid status")
+
+# =====================================================================
+#  BMS EXTENDED SENSORS
+# =====================================================================
+
+class BmsSimpleSensor(BaseSandiSensor):
+    """Generic BMS sensor with scaling."""
+    def __init__(self, hub, key, name, unit, icon, decimals=1):
+        super().__init__(hub, key, name)
+        self._attr_native_unit_of_measurement = unit
+        self._attr_icon = icon
+        self._decimals = decimals
+
+    async def async_update(self):
+        val = await self._hub.read_input_register(self._key)
+        if val is None:
+            self._attr_native_value = None
+            return
+        self._attr_native_value = float(f"{val:.{self._decimals}f}")
+
+class BmsIntSensor(BaseSandiSensor):
+    """Integer BMS sensor."""
+    async def async_update(self):
+        val = await self._hub.read_input_register(self._key)
+        self._attr_native_value = int(val) if val is not None else None
 
 # =====================================================================
 #  SETUP ENTRY
@@ -327,6 +352,25 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
         BatteryStatusTextSensor(hub, "battery_status", "Battery_status_text"),
         GridStatusTextSensor(hub, "inverter_status", "Grid_status_text"),
+    ]
+
+    # BMS extended
+    entities += [
+        BmsSimpleSensor(hub, "bms_fcc", "Battery_FCC_Ah",
+                        UnitOfElectricCurrent.AMPERE, "mdi:battery-heart", decimals=1),
+
+        BmsSimpleSensor(hub, "bms_rm", "Battery_RM_Ah",
+                        UnitOfElectricCurrent.AMPERE, "mdi:battery-clock", decimals=1),
+
+        BmsIntSensor(hub, "bms_soh", "Battery_SOH"),
+
+        BmsIntSensor(hub, "bms_cycle_count", "Battery_Cycle_Count"),
+
+        BmsSimpleSensor(hub, "bms_max_charge_current", "Battery_Max_Charge_Current",
+                        UnitOfElectricCurrent.AMPERE, "mdi:battery-plus", decimals=1),
+
+        BmsSimpleSensor(hub, "bms_max_discharge_current", "Battery_Max_Discharge_Current",
+                        UnitOfElectricCurrent.AMPERE, "mdi:battery-minus", decimals=1),
     ]
 
     async_add_entities(entities)

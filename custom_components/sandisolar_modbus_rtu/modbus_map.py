@@ -56,9 +56,6 @@ INPUT_REGISTERS = {
     "eps_energy_today": RegisterDef(407, 0.1, count=2),
     "eps_energy_total": RegisterDef(409, 0.1, count=2),
 
-    # Load (same as EPS energy)
-    "load_energy_today": RegisterDef(407, 0.1, count=2),
-    "load_energy_total": RegisterDef(409, 0.1, count=2),
 
     # Temperatures
     "inv_temp": RegisterDef(10, 0.1, signed=True),

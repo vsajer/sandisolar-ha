@@ -9,6 +9,10 @@ class RegisterDef:
     signed: bool = False
 
 
+# =====================================================================
+# INPUT REGISTERS
+# =====================================================================
+
 INPUT_REGISTERS = {
     # PV
     "pv1_voltage": RegisterDef(64, 0.1),
@@ -22,6 +26,7 @@ INPUT_REGISTERS = {
     "pv_energy_total": RegisterDef(381, 0.1, count=2),
 
     # Battery
+    "battery_status": RegisterDef(130),
     "battery_voltage": RegisterDef(127, 0.1),
     "battery_soc": RegisterDef(128, 1),
     "battery_current": RegisterDef(141, 0.01, signed=True),
@@ -56,27 +61,52 @@ INPUT_REGISTERS = {
     "eps_energy_today": RegisterDef(407, 0.1, count=2),
     "eps_energy_total": RegisterDef(409, 0.1, count=2),
 
-
     # Temperatures
     "inv_temp": RegisterDef(10, 0.1, signed=True),
     "boost_temp": RegisterDef(11, 0.1, signed=True),
     "llc_temp": RegisterDef(12, 0.1, signed=True),
     "ambient_temp": RegisterDef(14, 0.1, signed=True),
 
+    # inverter
+    "inverter_status": RegisterDef(0),
+    
     # Faults & warnings
     "fault_word0": RegisterDef(24),
     "fault_word1": RegisterDef(25),
     "warning_main": RegisterDef(33),
     "warning_sub": RegisterDef(35),
+
 }
 
 
-HOLDING_REGISTERS = {
-    "on_off": RegisterDef(0),
-    "charge_limit": RegisterDef(137),
-    "discharge_limit": RegisterDef(138),
-    "ac_charge_enable": RegisterDef(145),
+# =====================================================================
+# HOLDING REGISTERS (FINAL VERSION)
+# =====================================================================
 
+HOLDING_REGISTERS = {
+    # On/Off
+    "on_off": RegisterDef(0),
+
+    # EPS / BYPASS / UPS
+    "eps_enable": RegisterDef(108),
+    "bypass_enable": RegisterDef(109),
+    "ups_enable": RegisterDef(110),
+
+    # Battery power settings (from photos)
+    "charge_limit": RegisterDef(137),        # Charging Power %
+    "discharge_limit": RegisterDef(138),     # Discharging Power %
+    "end_of_charge_soc": RegisterDef(139),   # End of Charge SOC %
+
+    # SOC limits (from photos)
+    "on_grid_discharge_soc": RegisterDef(140),   # End of On-grid Discharge SOC
+    "off_grid_discharge_soc": RegisterDef(141),  # End of Off-grid Discharge SOC
+    "on_grid_recovery_soc": RegisterDef(185),    # On-grid Recovery SOC
+    "off_grid_recovery_soc": RegisterDef(187),   # Off-grid Recovery SOC
+
+    # Priority modes (your original)
     "charge_priority": RegisterDef(181),
     "source_priority": RegisterDef(182),
+
+    # AC charge enable (your original)
+    "ac_charge_enable": RegisterDef(145),
 }

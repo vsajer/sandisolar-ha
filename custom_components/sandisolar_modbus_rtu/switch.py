@@ -9,8 +9,11 @@ async def async_setup_entry(hass, entry, async_add_entities):
     hub = hass.data[DOMAIN][entry.entry_id]
 
     entities = [
-        SandiSolarSwitch(hub, "on_off", "Inverter On/Off", "mdi:power"),
+        SandiSolarSwitch(hub, "inverter_on_off", "Inverter On/Off", "mdi:power"),
         SandiSolarSwitch(hub, "ac_charge_enable", "AC Charge Enable", "mdi:transmission-tower"),
+        SandiSolarSwitch(hub, "eps_enable", "EPS Enable", "mdi:home-lightning-bolt"),
+        SandiSolarSwitch(hub, "bypass_enable", "Bypass Mode", "mdi:transfer"),
+        SandiSolarSwitch(hub, "ups_enable", "UPS Mode", "mdi:car-battery"),
     ]
 
     async_add_entities(entities)
@@ -27,6 +30,7 @@ class SandiSolarSwitch(SwitchEntity):
         self._attr_name = name
         self._attr_unique_id = f"sandisolar_switch_{key}"
         self._attr_icon = icon
+        self._state = None
 
     @property
     def device_info(self):
@@ -39,14 +43,22 @@ class SandiSolarSwitch(SwitchEntity):
 
     @property
     def is_on(self):
-        val = self._hub._cache.get(self._key)
-        return bool(val) if val is not None else False
+        return bool(self._state)
 
     async def async_update(self):
-        await self._hub.read_holding_register(self._key)
+        """Read the holding register value."""
+        val = await self._hub.read_holding_register(self._key)
+        if val is None:
+            self._state = False
+        else:
+            self._state = bool(val)
 
     async def async_turn_on(self):
         await self._hub.write_holding_register(self._key, 1)
+        self._state = True
+        self.async_write_ha_state()
 
     async def async_turn_off(self):
         await self._hub.write_holding_register(self._key, 0)
+        self._state = False
+        self.async_write_ha_state()

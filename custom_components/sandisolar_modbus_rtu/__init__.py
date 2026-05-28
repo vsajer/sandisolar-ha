@@ -1,14 +1,14 @@
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .hub import SandiSolarHub
+from .hub import SandiSolarModbusHub
 from .const import DOMAIN
 
 PLATFORMS = ["sensor", "switch", "number", "select"]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    hub = SandiSolarHub(hass, entry)
+    hub = SandiSolarModbusHub(hass, entry)
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = hub
 
     await hub.async_init()

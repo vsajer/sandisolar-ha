@@ -5,7 +5,7 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 # ---------------------------------------------------------
-# OPTIONS MAPPING (label → register value)
+# OPTIONS MAPPING (value → register value)
 # ---------------------------------------------------------
 
 SOURCE_PRIORITY_OPTIONS = {
@@ -32,14 +32,14 @@ async def async_setup_entry(hass, entry, async_add_entities):
     entities = [
         SandiSolarSelect(
             hub,
-            400,   # Modbus register
+            "source_priority",
             "Source Priority",
             SOURCE_PRIORITY_OPTIONS,
             "mdi:solar-power"
         ),
         SandiSolarSelect(
             hub,
-            401,   # Modbus register
+            "charge_priority",
             "Charge Priority",
             CHARGE_PRIORITY_OPTIONS,
             "mdi:battery-charging"
@@ -58,13 +58,13 @@ class SandiSolarSelect(SelectEntity):
 
     _attr_has_entity_name = True
 
-    def __init__(self, hub, register, name, mapping, icon):
+    def __init__(self, hub, key, name, mapping, icon):
         self._hub = hub
-        self._register = register
+        self._key = key
         self._mapping = mapping
 
         self._attr_name = name
-        self._attr_unique_id = f"sandisolar_select_{register}"
+        self._attr_unique_id = f"sandisolar_select_{key}"
         self._attr_options = list(mapping.keys())
         self._attr_icon = icon
 
@@ -87,7 +87,7 @@ class SandiSolarSelect(SelectEntity):
 
     @property
     def current_option(self):
-        raw = self._hub._cache.get(self._register)
+        raw = self._hub._cache.get(self._key)
         if raw is None:
             return None
 
@@ -102,7 +102,7 @@ class SandiSolarSelect(SelectEntity):
     # -----------------------------------------------------
 
     async def async_update(self):
-        await self._hub.read_holding_register(self._register)
+        await self._hub.read_holding_register(self._key)
 
     # -----------------------------------------------------
     # WRITE
@@ -110,4 +110,4 @@ class SandiSolarSelect(SelectEntity):
 
     async def async_select_option(self, option: str):
         value = self._mapping[option]
-        await self._hub.write_holding_register(self._register, value)
+        await self._hub.write_holding_register(self._key, value)

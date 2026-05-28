@@ -32,6 +32,15 @@ INPUT_REGISTERS = {
 
     "battery_discharge_power": RegisterDef(349, 0.1, count=2),
     "battery_charge_power": RegisterDef(351, 0.1, count=2),
+    # --- BMS extended info ---
+    "bms_max_charge_current": RegisterDef(143, 0.1),         
+    "bms_max_discharge_current": RegisterDef(144, 0.1),
+
+    "bms_fcc": RegisterDef(145, 0.1), 
+    "bms_rm": RegisterDef(146, 0.1), 
+
+    "bms_cycle_count": RegisterDef(151),
+    "bms_soh": RegisterDef(152),
 
     "battery_charge_energy_today": RegisterDef(383, 0.1, count=2),
     "battery_charge_energy_total": RegisterDef(385, 0.1, count=2),

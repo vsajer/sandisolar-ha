@@ -9,7 +9,7 @@ class RegisterDef:
 
 
 # =====================================================================
-# INPUT REGISTERS
+# INPUT REGISTERS (READ-ONLY)
 # =====================================================================
 
 INPUT_REGISTERS = {
@@ -32,13 +32,12 @@ INPUT_REGISTERS = {
 
     "battery_discharge_power": RegisterDef(349, 0.1, count=2),
     "battery_charge_power": RegisterDef(351, 0.1, count=2),
-    # --- BMS extended info ---
-    "bms_max_charge_current": RegisterDef(143, 0.1),         
+
+    # BMS extended
+    "bms_max_charge_current": RegisterDef(143, 0.1),
     "bms_max_discharge_current": RegisterDef(144, 0.1),
-
-    "bms_fcc": RegisterDef(145, 0.1), 
-    "bms_rm": RegisterDef(146, 0.1), 
-
+    "bms_fcc": RegisterDef(145, 0.1),
+    "bms_rm": RegisterDef(146, 0.1),
     "bms_cycle_count": RegisterDef(151),
     "bms_soh": RegisterDef(152),
 
@@ -82,23 +81,19 @@ INPUT_REGISTERS = {
     # Status text sensors
     "battery_status": RegisterDef(130),
     "inverter_status": RegisterDef(0),
-}
 
-
-# =====================================================================
-# HOLDING REGISTERS
-# =====================================================================
-
-HOLDING_REGISTERS = {
-    # On/Off
-    "inverter_on_off": RegisterDef(0),
-    
-    # Device info
+    # ---------------------------------------------------------
+    # DEVICE INFO (ASCII)
+    # ---------------------------------------------------------
     "device_model": RegisterDef(0, scale=1, count=2),
     "device_name": RegisterDef(2, scale=1, count=2),
 
+    # Total work time (uint32)
     "total_work_time": RegisterDef(46, scale=1, count=2),
 
+    # ---------------------------------------------------------
+    # FIRMWARE (ASCII + uint16)
+    # ---------------------------------------------------------
     "fw_main_version": RegisterDef(28, scale=1, count=3),
     "fw_arm_name": RegisterDef(31, scale=1, count=2),
     "fw_arm_version": RegisterDef(33),
@@ -108,7 +103,17 @@ HOLDING_REGISTERS = {
     "fw_dsp1_debug": RegisterDef(38),
     "fw_dsp2_debug": RegisterDef(39),
     "fw_arm_debug": RegisterDef(40),
-    
+}
+
+
+# =====================================================================
+# HOLDING REGISTERS (READ/WRITE)
+# =====================================================================
+
+HOLDING_REGISTERS = {
+    # On/Off
+    "inverter_on_off": RegisterDef(0),
+
     # EPS / BYPASS / UPS
     "eps_enable": RegisterDef(108),
     "bypass_enable": RegisterDef(109),
@@ -129,5 +134,4 @@ HOLDING_REGISTERS = {
     # Priority modes
     "charge_priority": RegisterDef(181),
     "source_priority": RegisterDef(182),
-   
 }

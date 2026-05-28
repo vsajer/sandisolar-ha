@@ -1,141 +1,231 @@
 import asyncio
 import logging
+from typing import Optional, Dict, Any
+
 from pymodbus.client import AsyncModbusSerialClient
+from pymodbus.exceptions import ModbusException
+
+from homeassistant.core import HomeAssistant
+from homeassistant.config_entries import ConfigEntry
+
+from .modbus_map import INPUT_REGISTERS, HOLDING_REGISTERS
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class SandiSolarHub:
-    """Modbus RTU hub for SANDISOLAR SD‑PRO‑EU (pymodbus 3.2.11)."""
+class SandiSolarModbusHub:
+    """Modbus RTU hub for SANDISOLAR SD-PRO-EU using pymodbus 4.x."""
 
-    def __init__(self, hass, entry):
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self.hass = hass
         self.entry = entry
 
-        self._port = entry.data.get("port")
-        self._baudrate = entry.data.get("baudrate", 9600)
-        self._slave_id = entry.data.get("slave", 1)
-        self._update_interval = entry.data.get("update_interval", 10)
+        self.port: str = entry.data["port"]
+        self.baudrate: int = entry.data["baudrate"]
+        self.slave: int = entry.data["slave"]
+        self.update_interval: int = entry.data["update_interval"]
 
-        self._parity = "N"
-        self._stopbits = 1
-        self._bytesize = 8
+        self._client: Optional[AsyncModbusSerialClient] = None
+        self._lock = asyncio.Lock()
+        self._cache: Dict[str, Any] = {}
+
+    # -------------------------------------------------------------------------
+    # Lifecycle
+    # -------------------------------------------------------------------------
+
+    async def async_init(self) -> None:
+        """Initialize and connect Modbus client."""
+        _LOGGER.info(
+            "SANDISOLAR: Initializing Modbus client on %s @ %s baud (slave %s)",
+            self.port,
+            self.baudrate,
+            self.slave,
+        )
+
+        self._client = AsyncModbusSerialClient(
+            port=self.port,
+            baudrate=self.baudrate,
+            bytesize=8,
+            parity="N",
+            stopbits=1,
+            timeout=3,
+        )
+
+        connected = await self._client.connect()
+        if not connected or not getattr(self._client, "connected", False):
+            self._client = None
+            raise ModbusException(f"SANDISOLAR: Cannot open serial port {self.port}")
+
+        _LOGGER.info("SANDISOLAR: Connected to %s", self.port)
+
+    async def close(self) -> None:
+        """Safely close Modbus client."""
+        client = self._client
+
+        if client is None:
+            return
+
+        try:
+            close_fn = getattr(client, "close", None)
+            if callable(close_fn):
+                result = close_fn()
+                if asyncio.iscoroutine(result):
+                    await result
+        except Exception as e:
+            _LOGGER.warning("SANDISOLAR: Error while closing Modbus client: %s", e)
 
         self._client = None
-        self._lock = asyncio.Lock()
+        _LOGGER.info("SANDISOLAR: Modbus client closed")
 
-        self._cache = {}
+    # -------------------------------------------------------------------------
+    # Internal helpers
+    # -------------------------------------------------------------------------
 
-    async def async_init(self):
-        return await self.connect()
+    async def _ensure_connection(self) -> None:
+        """Ensure client exists and is connected."""
+        if self._client is None:
+            raise ModbusException("SANDISOLAR: Modbus client not initialized")
 
-    async def connect(self):
-        try:
-            self._client = AsyncModbusSerialClient(
-                port=self._port,
-                baudrate=self._baudrate,
-                parity=self._parity,
-                stopbits=self._stopbits,
-                bytesize=self._bytesize,
-                timeout=2,
-            )
+        if not getattr(self._client, "connected", False):
+            _LOGGER.warning("SANDISOLAR: Modbus client disconnected, reconnecting...")
+            connected = await self._client.connect()
+            if not connected or not getattr(self._client, "connected", False):
+                raise ModbusException("SANDISOLAR: Failed to reconnect Modbus client")
 
-            ok = await self._client.connect()
+    def get_cached(self, key: str) -> Optional[Any]:
+        """Return last cached value for given key."""
+        return self._cache.get(key)
 
-            if not ok:
-                _LOGGER.error("Failed to connect to Modbus device on %s", self._port)
-                self._client = None
-                return False
+    # -------------------------------------------------------------------------
+    # Register access – INPUT
+    # -------------------------------------------------------------------------
 
-            _LOGGER.info("Connected to Modbus device on %s", self._port)
-            return True
+    async def read_input_register(self, key: str) -> Optional[float]:
+        """Read and decode input register defined in INPUT_REGISTERS."""
+        if key not in INPUT_REGISTERS:
+            _LOGGER.error("SANDISOLAR: Unknown input register key '%s'", key)
+            return None
 
-        except Exception as e:
-            _LOGGER.error("Error connecting Modbus client: %s", e)
-            self._client = None
+        reg = INPUT_REGISTERS[key]
+
+        async with self._lock:
+            try:
+                await self._ensure_connection()
+            except ModbusException as e:
+                _LOGGER.error("SANDISOLAR: Connection error before input read %s: %s", key, e)
+                return None
+
+            try:
+                self._client.unit_id = self.slave
+                result = await self._client.read_input_registers(
+                    address=reg.address,
+                    count=reg.count,
+                )
+            except Exception as e:
+                _LOGGER.error("SANDISOLAR: Read error %s: %s", key, e)
+                return None
+
+        if result.isError():
+            _LOGGER.error("SANDISOLAR: Modbus error reading %s: %s", key, result)
+            return None
+
+        # 16/32bit decode
+        if reg.count == 2:
+            raw = (result.registers[0] << 16) | result.registers[1]
+            bits = 32
+        else:
+            raw = result.registers[0]
+            bits = 16
+
+        # signed/unsigned
+        if reg.signed:
+            max_val = 1 << (bits - 1)
+            if raw >= max_val:
+                raw -= 1 << bits
+
+        value = raw * reg.scale
+        self._cache[key] = value
+        return value
+
+    # -------------------------------------------------------------------------
+    # Register access – HOLDING (read)
+    # -------------------------------------------------------------------------
+
+    async def read_holding_register(self, key: str) -> Optional[float]:
+        """Read and decode holding register defined in HOLDING_REGISTERS."""
+        if key not in HOLDING_REGISTERS:
+            _LOGGER.error("SANDISOLAR: Unknown holding register key '%s'", key)
+            return None
+
+        reg = HOLDING_REGISTERS[key]
+
+        async with self._lock:
+            try:
+                await self._ensure_connection()
+            except ModbusException as e:
+                _LOGGER.error("SANDISOLAR: Connection error before holding read %s: %s", key, e)
+                return None
+
+            try:
+                self._client.unit_id = self.slave
+                result = await self._client.read_holding_registers(
+                    address=reg.address,
+                    count=reg.count,
+                )
+            except Exception as e:
+                _LOGGER.error("SANDISOLAR: Holding read error %s: %s", key, e)
+                return None
+
+        if result.isError():
+            _LOGGER.error("SANDISOLAR: Modbus error reading holding %s: %s", key, result)
+            return None
+
+        # Většina holding registrů u tebe je 1x16bit → jednoduché dekódování
+        raw = result.registers[0]
+        value = raw * reg.scale
+        self._cache[key] = value
+        return value
+
+    # -------------------------------------------------------------------------
+    # Register access – HOLDING (write)
+    # -------------------------------------------------------------------------
+
+    async def write_holding_register(self, key: str, value: float) -> bool:
+        """Write value to holding register defined in HOLDING_REGISTERS."""
+        if key not in HOLDING_REGISTERS:
+            _LOGGER.error("SANDISOLAR: Unknown holding register key '%s'", key)
             return False
 
-    async def close(self):
-        if self._client:
-            try:
-                await self._client.close()
-            except Exception as e:
-                _LOGGER.warning("Error closing Modbus client: %s", e)
+        reg = HOLDING_REGISTERS[key]
 
-        self._client = None
+        # scale → raw
+        try:
+            raw = int(round(value / reg.scale))
+        except Exception as e:
+            _LOGGER.error("SANDISOLAR: Scaling error for %s (%s): %s", key, value, e)
+            return False
 
-    # ---------------------------------------------------------
-    # INPUT REGISTERS
-    # ---------------------------------------------------------
-
-    async def read_input_register(self, register):
         async with self._lock:
-            if not self._client:
-                return None
-
             try:
-                result = await self._client.read_input_registers(
-                    register,
-                    1,
-                    unit=self._slave_id,
-                )
-
-                if result.isError():
-                    return None
-
-                value = result.registers[0]
-                self._cache[register] = value
-                return value
-
-            except Exception as e:
-                _LOGGER.error("Exception reading input register %s: %s", register, e)
-                return None
-
-    # ---------------------------------------------------------
-    # HOLDING REGISTERS
-    # ---------------------------------------------------------
-
-    async def read_holding_register(self, register):
-        async with self._lock:
-            if not self._client:
-                return None
-
-            try:
-                result = await self._client.read_holding_registers(
-                    register,
-                    1,
-                    unit=self._slave_id,
-                )
-
-                if result.isError():
-                    return None
-
-                value = result.registers[0]
-                self._cache[register] = value
-                return value
-
-            except Exception as e:
-                _LOGGER.error("Exception reading holding register %s: %s", register, e)
-                return None
-
-    async def write_holding_register(self, register, value):
-        async with self._lock:
-            if not self._client:
+                await self._ensure_connection()
+            except ModbusException as e:
+                _LOGGER.error("SANDISOLAR: Connection error before write %s: %s", key, e)
                 return False
 
             try:
+                self._client.unit_id = self.slave
                 result = await self._client.write_register(
-                    register,
-                    value,
-                    unit=self._slave_id,
+                    address=reg.address,
+                    value=raw,
                 )
-
-                if result.isError():
-                    return False
-
-                self._cache[register] = value
-                return True
-
             except Exception as e:
-                _LOGGER.error("Exception writing holding register %s: %s", register, e)
+                _LOGGER.error("SANDISOLAR: Write error %s: %s", key, e)
                 return False
+
+        if result.isError():
+            _LOGGER.error("SANDISOLAR: Modbus error writing %s: %s", key, result)
+            return False
+
+        # po úspěšném zápisu aktualizuj cache
+        self._cache[key] = value
+        return True

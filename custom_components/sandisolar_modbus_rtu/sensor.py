@@ -326,8 +326,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
                      UnitOfEnergy.KILO_WATT_HOUR, "mdi:home-lightning-bolt"),
     ]
 
-# Faults & warnings + TEXTOVÉ SENZORY
-   entities += [
+    # Faults & warnings + TEXTOVÉ SENZORY
+    entities += [
         FaultSensor(hub, "fault_word0", "Fault_word0"),
         FaultWord0TextSensor(hub, "fault_word0", "Fault_word0_text"),
 
@@ -339,6 +339,6 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
         BatteryStatusTextSensor(hub, "battery_status", "Battery_status_text"),
         GridStatusTextSensor(hub, "inverter_status", "Grid_status_text"),
-]
+    ]
 
     async_add_entities(entities)

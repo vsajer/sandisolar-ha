@@ -92,7 +92,12 @@ INPUT_REGISTERS = {
 HOLDING_REGISTERS = {
     # On/Off
     "inverter_on_off": RegisterDef(0),
-
+    
+    # Device info
+    "device_model": RegisterDef(0, scale=1, count=2),     # ASCII
+    "device_name": RegisterDef(2, scale=1, count=2),      # ASCII
+    "total_work_time": RegisterDef(46, scale=1, count=2),
+    
     # EPS / BYPASS / UPS
     "eps_enable": RegisterDef(108),
     "bypass_enable": RegisterDef(109),
@@ -102,6 +107,7 @@ HOLDING_REGISTERS = {
     "charge_limit": RegisterDef(137),
     "discharge_limit": RegisterDef(138),
     "end_of_charge_soc": RegisterDef(139),
+    "ac_charge_enable": RegisterDef(145),
 
     # SOC limits
     "on_grid_discharge_soc": RegisterDef(140),
@@ -112,7 +118,5 @@ HOLDING_REGISTERS = {
     # Priority modes
     "charge_priority": RegisterDef(181),
     "source_priority": RegisterDef(182),
-
-    # AC charge enable
-    "ac_charge_enable": RegisterDef(145),
+   
 }

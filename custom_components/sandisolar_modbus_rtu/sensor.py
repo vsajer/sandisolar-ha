@@ -28,9 +28,52 @@ GRID_STATUS_MAP = {
     6: "Self-charging",
 }
 
-WARNING_MAIN_MAP = {0: "OK"}
-WARNING_SUB_MAP = {0: "OK"}
-FAULT_WORD0_MAP = {0: "No fault"}
+FAULT_WORD0_MAP = {
+    0: "No fault",
+    103: "Inverter DC offset is too high",
+    105: "Bypass AC output is overloaded",
+    200: "Off-grid output voltage is too low",
+    201: "Off-grid output voltage is too high",
+    202: "Off-grid output has a short circuit",
+    203: "Off-grid output is overloaded",
+    204: "Abnormal off-grid output DC component offset",
+    301: "Battery open circuit",
+    305: "Battery overvoltage",
+    306: "Battery overcurrent",
+    307: "Battery communication fault",
+    308: "BMS fault",
+    400: "PV overvoltage",
+    403: "PV short circuit",
+    404: "PV reverse connection",
+    500: "Abnormal BUS voltage",
+    501: "Abnormal BUS voltage sampling",
+    502: "Abnormal communication in the device",
+    505: "Abnormal connection of the temperature sensor",
+    506: "Device over-temperature",
+    507: "Abnormal relay",
+    509: "Anti-counter-current output timeout",
+    510: "Mismatched software version",
+    511: "Fan fault",
+    513: "Parallel abnormality",
+}
+
+WARNING_MAIN_MAP = {
+    0: "OK",
+    103: "Grid unavailable",
+    104: "Overrange voltage of grid",
+    105: "Overrange frequency of grid",
+    106: "No output voltage from the generator",
+    107: "Overrange output voltage of the generator",
+    108: "Overrange output frequency of the generator",
+    302: "Low battery",
+    304: "Abnormal BMS information",
+    305: "Low battery voltage alarm",
+    502: "Abnormal memory reading and writing",
+}
+
+WARNING_SUB_MAP = {
+    0: "OK",
+}
 
 BATTERY_STATUS_MAP = {
     0: "Normal",
@@ -47,7 +90,7 @@ class BaseSandiSensor(SensorEntity):
         self._hub = hub
         self._key = key
         self._attr_name = name
-        self._attr_unique_id = f"sandisolar_sensor_{key}"
+        self._attr_unique_id = f"sandisolar_sensor_{key}_{name.lower().replace(' ', '_')}"
 
     @property
     def device_info(self):
@@ -116,12 +159,11 @@ class BatteryPowerSensor(BaseSandiSensor):
             self._attr_native_value = None
             return
 
-        self._attr_native_value = int(discharge - charge)
+        self._attr_native_value = int(charge - discharge)
 
 
 class WorkTimeSensor(BaseSandiSensor):
     _attr_icon = "mdi:clock-time-eight"
-    _attr_native_unit_of_measurement = "h"
 
     async def async_update(self):
         val = await self._hub.read_input_register(self._key)
@@ -131,7 +173,6 @@ class WorkTimeSensor(BaseSandiSensor):
             return
 
         total_minutes = int(val * 0.5)
-
         days = total_minutes // 1440
         hours = (total_minutes % 1440) // 60
         minutes = total_minutes % 60
@@ -149,8 +190,27 @@ class FaultWord0TextSensor(BaseSandiSensor):
             self._attr_native_value = None
             return
 
-        self._attr_native_value = FAULT_WORD0_MAP.get(val, "Unknown fault code")
-        self._attr_extra_state_attributes = {"raw_value": val}
+        code = int(val)
+        text = FAULT_WORD0_MAP.get(code, "Unknown fault code")
+        self._attr_native_value = f"{code} - {text}"
+        self._attr_extra_state_attributes = {
+            "raw_value": code,
+            "message": text,
+        }
+
+
+class WarningMainCodeSensor(BaseSandiSensor):
+    _attr_icon = "mdi:numeric"
+    _attr_native_unit_of_measurement = None
+
+    async def async_update(self):
+        val = await self._hub.read_input_register(self._key)
+
+        if val is None:
+            self._attr_native_value = None
+            return
+
+        self._attr_native_value = int(val)
 
 
 class WarningMainTextSensor(BaseSandiSensor):
@@ -163,8 +223,28 @@ class WarningMainTextSensor(BaseSandiSensor):
             self._attr_native_value = None
             return
 
-        self._attr_native_value = WARNING_MAIN_MAP.get(val, "Unknown warning code")
-        self._attr_extra_state_attributes = {"raw_value": val}
+        code = int(val)
+        text = WARNING_MAIN_MAP.get(code, "Unknown warning code")
+
+        self._attr_native_value = f"{code} - {text}"
+        self._attr_extra_state_attributes = {
+            "raw_value": code,
+            "message": text,
+        }
+
+
+class WarningSubCodeSensor(BaseSandiSensor):
+    _attr_icon = "mdi:numeric"
+    _attr_native_unit_of_measurement = None
+
+    async def async_update(self):
+        val = await self._hub.read_input_register(self._key)
+
+        if val is None:
+            self._attr_native_value = None
+            return
+
+        self._attr_native_value = int(val)
 
 
 class WarningSubTextSensor(BaseSandiSensor):
@@ -177,8 +257,14 @@ class WarningSubTextSensor(BaseSandiSensor):
             self._attr_native_value = None
             return
 
-        self._attr_native_value = WARNING_SUB_MAP.get(val, "Unknown sub-warning code")
-        self._attr_extra_state_attributes = {"raw_value": val}
+        code = int(val)
+        text = WARNING_SUB_MAP.get(code, "Unknown sub-warning code")
+
+        self._attr_native_value = f"{code} - {text}"
+        self._attr_extra_state_attributes = {
+            "raw_value": code,
+            "message": text,
+        }
 
 
 class BatteryStatusTextSensor(BaseSandiSensor):
@@ -191,9 +277,10 @@ class BatteryStatusTextSensor(BaseSandiSensor):
             self._attr_native_value = None
             return
 
+        code = int(val)
         self._attr_native_value = BATTERY_STATUS_MAP.get(
-            val,
-            f"Raw BMS status: {val}",
+            code,
+            f"Raw BMS status: {code}",
         )
 
 
@@ -207,8 +294,9 @@ class GridStatusTextSensor(BaseSandiSensor):
             self._attr_native_value = None
             return
 
+        code = int(val)
         self._attr_native_value = GRID_STATUS_MAP.get(
-            val,
+            code,
             "Unknown inverter status",
         )
 
@@ -277,8 +365,6 @@ async def async_setup_entry(hass, entry, async_add_entities):
                      UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT, "mdi:home-lightning-bolt", 1),
         SimpleSensor(hub, "eps_power", "EPS Power",
                      UnitOfPower.WATT, SensorDeviceClass.POWER, "mdi:home-lightning-bolt", 0),
-        SimpleSensor(hub, "eps_local_load_power", "EPS Local Load Power",
-                     UnitOfPower.WATT, SensorDeviceClass.POWER, "mdi:home-lightning-bolt-outline", 0),
         SimpleSensor(hub, "eps_active_power", "EPS Active Power",
                      UnitOfPower.WATT, SensorDeviceClass.POWER, "mdi:flash", 0),
         SimpleSensor(hub, "eps_apparent_power", "EPS Apparent Power",
@@ -289,8 +375,12 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
         GridStatusTextSensor(hub, "inverter_status", "Inverter Status"),
         BatteryStatusTextSensor(hub, "battery_status", "Battery Status"),
+
         FaultWord0TextSensor(hub, "fault_word0", "Fault Word0 Text"),
+
+        WarningMainCodeSensor(hub, "warning_main", "Warning Main Code"),
         WarningMainTextSensor(hub, "warning_main", "Warning Main Text"),
+        WarningSubCodeSensor(hub, "warning_sub", "Warning Sub Code"),
         WarningSubTextSensor(hub, "warning_sub", "Warning Sub Text"),
 
         WorkTimeSensor(hub, "total_work_time", "Total Work Time"),

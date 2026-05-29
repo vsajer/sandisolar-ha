@@ -76,7 +76,7 @@ class SandiSolarModbusHub:
             rr = await self._client.read_input_registers(
                 address=address,
                 count=count,
-                slave=self._slave
+                unit=self._slave
             )
             if rr.isError():
                 return None
@@ -95,7 +95,7 @@ class SandiSolarModbusHub:
             rr = await self._client.read_holding_registers(
                 address=address,
                 count=count,
-                slave=self._slave
+                unit=self._slave
             )
             if rr.isError():
                 return None
@@ -168,7 +168,7 @@ class SandiSolarModbusHub:
             rq = await self._client.write_register(
                 address=reg.address,
                 value=raw_value,
-                slave=self._slave
+                unit=self._slave
             )
             if rq.isError():
                 _LOGGER.error("SANDISOLAR: Write error for %s", key)

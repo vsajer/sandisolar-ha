@@ -41,6 +41,19 @@ class SandiSolarModbusHub:
             _LOGGER.info("SANDISOLAR: Modbus connected")
 
     # ------------------------------------------------------------------
+    # CLOSE CONNECTION
+    # ------------------------------------------------------------------
+
+    async def close(self):
+        """Close Modbus connection."""
+        if self._client:
+            try:
+                await self._client.close()
+                _LOGGER.info("SANDISOLAR: Modbus connection closed")
+            except Exception as e:
+                _LOGGER.error("SANDISOLAR: Error closing Modbus: %s", e)
+
+    # ------------------------------------------------------------------
     # CACHE
     # ------------------------------------------------------------------
 

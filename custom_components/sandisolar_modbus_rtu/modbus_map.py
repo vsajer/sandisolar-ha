@@ -67,6 +67,12 @@ INPUT_REGISTERS = {
     "grid_out_energy_total": RegisterDef(413, 0.1, count=2),
     "grid_in_energy_today": RegisterDef(415, 0.1, count=2),
     "grid_in_energy_total": RegisterDef(417, 0.1, count=2),
+    "energy_sold_today": RegisterDef(419, 0.1, count=2),
+    "energy_sold_total": RegisterDef(421, 0.1, count=2),
+    "energy_bought_today": RegisterDef(423, 0.1, count=2),
+    "energy_bought_total": RegisterDef(425, 0.1, count=2),
+    "self_to_load_today": RegisterDef(427, 0.1, count=2),
+    "self_to_load_total": RegisterDef(429, 0.1, count=2),
 
     "total_work_time": RegisterDef(107, scale=1, count=2),
 }

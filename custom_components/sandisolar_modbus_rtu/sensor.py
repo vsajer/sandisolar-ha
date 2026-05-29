@@ -30,24 +30,9 @@ GRID_STATUS_MAP = {
     6: "Self‑charging",
 }
 
-WARNING_MAIN_MAP = {
-    0: "OK",
-    103: "Grid unavailable",
-    104: "Grid voltage out of range",
-    105: "Grid frequency out of range",
-    302: "Low battery",
-    304: "Abnormal BMS information",
-    305: "Low battery voltage alarm",
-    502: "Abnormal memory read/write",
-}
-
-WARNING_SUB_MAP = {
-    0: "OK",
-}
-
-FAULT_WORD0_MAP = {
-    0: "No fault",
-}
+WARNING_MAIN_MAP = {0: "OK"}
+WARNING_SUB_MAP = {0: "OK"}
+FAULT_WORD0_MAP = {0: "No fault"}
 
 BATTERY_STATUS_MAP = {
     0: "OK",
@@ -72,10 +57,10 @@ class BaseSandiSensor(SensorEntity):
     @property
     def device_info(self):
         return {
-        "identifiers": {("sandisolar_modbus_rtu", "sdproeu_main")},
-        "name": self._hub.get_cached("device_name") or "SANDISOLAR SD-PRO-EU",
-        "manufacturer": "SANDISOLAR",
-        "model": self._hub.get_cached("device_model") or "SD-PRO-EU 6.5K",
+            "identifiers": {("sandisolar_modbus_rtu", "sdproeu_main")},
+            "name": self._hub.get_cached("device_name") or "SANDISOLAR SD-PRO-EU",
+            "manufacturer": "SANDISOLAR",
+            "model": self._hub.get_cached("device_model") or "SD-PRO-EU 6.5K",
         }
 
 # =====================================================================
@@ -99,7 +84,7 @@ class SimpleSensor(BaseSandiSensor):
         if self._decimals == 0:
             self._attr_native_value = int(val)
         else:
-            self._attr_native_value = float(f"{val:.{self._decimals}f}")
+            self._attr_native_value = round(val, self._decimals)
 
 # =====================================================================
 #  ENERGY SENSOR
@@ -124,7 +109,7 @@ class EnergySensor(BaseSandiSensor):
             val = self._last_value
 
         self._last_value = val
-        self._attr_native_value = float(f"{val:.1f}")
+        self._attr_native_value = round(val, 1)
 
 # =====================================================================
 #  SPECIAL SENSORS
@@ -220,7 +205,6 @@ class GridStatusTextSensor(BaseSandiSensor):
 # =====================================================================
 
 class BmsSimpleSensor(BaseSandiSensor):
-    """Generic BMS sensor with scaling."""
     def __init__(self, hub, key, name, unit, icon, decimals=1):
         super().__init__(hub, key, name)
         self._attr_native_unit_of_measurement = unit
@@ -232,10 +216,9 @@ class BmsSimpleSensor(BaseSandiSensor):
         if val is None:
             self._attr_native_value = None
             return
-        self._attr_native_value = float(f"{val:.{self._decimals}f}")
+        self._attr_native_value = round(val, self._decimals)
 
 class BmsIntSensor(BaseSandiSensor):
-    """Integer BMS sensor."""
     async def async_update(self):
         val = await self._hub.read_input_register(self._key)
         self._attr_native_value = int(val) if val is not None else None
@@ -372,7 +355,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
         BmsSimpleSensor(hub, "bms_max_discharge_current", "Battery_Max_Discharge_Current",
                         UnitOfElectricCurrent.AMPERE, "mdi:battery-minus", decimals=1),
     ]
- # Device info sensors
+
+    # Device info sensors (not supported by SD‑PRO‑EU, but kept for variant A)
     entities += [
         SimpleSensor(hub, "device_model", "Device_Model",
                      None, None, "mdi:identifier", decimals=0),
@@ -383,4 +367,5 @@ async def async_setup_entry(hass, entry, async_add_entities):
         SimpleSensor(hub, "total_work_time", "Total_Work_Time",
                      "h", None, "mdi:clock-time-eight", decimals=0),
     ]
+
     async_add_entities(entities)

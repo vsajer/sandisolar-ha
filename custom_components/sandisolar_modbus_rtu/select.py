@@ -21,6 +21,15 @@ CHARGE_PRIORITY_OPTIONS = {
     "OSO – Utility → Solar": 2,
 }
 
+GEN_PORT_WORK_MODE_OPTIONS = {
+    "0 – Default": 0,
+    "1 – Generator Enable": 1,
+    "2 – Generator Force": 2,
+    "3 – SmartLoad Output": 3,
+    "4 – On Grid always on": 4,
+    "5 – Off Grid immediately off": 5,
+    "6 – AC Couple on SecEPS side": 6,
+}
 
 # ---------------------------------------------------------
 # SETUP
@@ -44,10 +53,16 @@ async def async_setup_entry(hass, entry, async_add_entities):
             CHARGE_PRIORITY_OPTIONS,
             "mdi:battery-charging"
         ),
+        SandiSolarSelect(
+            hub,
+            "gen_port_work_mode",
+            "GEN Port Work Mode",
+            GEN_PORT_WORK_MODE_OPTIONS,
+            "mdi:dip-switch"
+        ),
     ]
 
     async_add_entities(entities)
-
 
 # ---------------------------------------------------------
 # ENTITY CLASS

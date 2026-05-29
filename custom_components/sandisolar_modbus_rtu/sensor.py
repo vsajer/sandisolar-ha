@@ -356,9 +356,19 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
         EnergySensor(hub, "grid_in_energy_today", "Grid Import Energy Today", "mdi:transmission-tower-import"),
         EnergySensor(hub, "grid_in_energy_total", "Grid Import Energy Total", "mdi:transmission-tower-import"),
+        
         EnergySensor(hub, "grid_out_energy_today", "Grid Export Energy Today", "mdi:transmission-tower-export"),
         EnergySensor(hub, "grid_out_energy_total", "Grid Export Energy Total", "mdi:transmission-tower-export"),
+        
+        EnergySensor(hub, "energy_sold_today", "Energy Sold Today", "mdi:cash-plus"),
+        EnergySensor(hub, "energy_sold_total", "Energy Sold Total", "mdi:cash-plus"),
 
+        EnergySensor(hub, "energy_bought_today", "Energy Bought Today", "mdi:cash-minus"),
+        EnergySensor(hub, "energy_bought_total", "Energy Bought Total", "mdi:cash-minus"),
+
+        EnergySensor(hub, "self_to_load_today", "Self To Load Today", "mdi:home-lightning-bolt"),
+        EnergySensor(hub, "self_to_load_total", "Self To Load Total", "mdi:home-lightning-bolt"),
+        
         SimpleSensor(hub, "eps_voltage", "EPS Voltage",
                      UnitOfElectricPotential.VOLT, SensorDeviceClass.VOLTAGE, "mdi:home-lightning-bolt", 1),
         SimpleSensor(hub, "eps_current", "EPS Current",

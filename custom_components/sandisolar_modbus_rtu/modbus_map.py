@@ -2,6 +2,13 @@ from dataclasses import dataclass
 
 @dataclass
 class RegisterDef:
+    """Simple register definition used by the integration.
+
+    - address: Modbus register address (decimal)
+    - scale: multiply raw value by this to get real value (default 1.0)
+    - count: number of 16-bit registers (for 32-bit values or ASCII blocks)
+    - signed: whether the raw value should be interpreted as signed
+    """
     address: int
     scale: float = 1.0
     count: int = 1
@@ -85,6 +92,7 @@ INPUT_REGISTERS = {
     # ---------------------------------------------------------
     # DEVICE INFO (ASCII)
     # ---------------------------------------------------------
+    # device_model and device_name are ASCII blocks (count registers)
     "device_model": RegisterDef(0, scale=1, count=2),
     "device_name": RegisterDef(2, scale=1, count=2),
 
@@ -111,27 +119,55 @@ INPUT_REGISTERS = {
 # =====================================================================
 
 HOLDING_REGISTERS = {
-    # On/Off
+    # On/Off / basic control
     "inverter_on_off": RegisterDef(0),
 
+    # System / communication
+    "device_id": RegisterDef(3),
+
     # EPS / BYPASS / UPS
-    "eps_enable": RegisterDef(108),
-    "bypass_enable": RegisterDef(109),
-    "ups_enable": RegisterDef(110),
+    "eps_enable": RegisterDef(108),       # reg 108: EPS enable
+    "bypass_enable": RegisterDef(109),    # reg 109: Bypass enable
+    "ups_enable": RegisterDef(110),       # reg 110: UPS mode (already present)
 
-    # Battery power settings
-    "charge_limit": RegisterDef(137),
-    "discharge_limit": RegisterDef(138),
-    "end_of_charge_soc": RegisterDef(139),
-    "ac_charge_enable": RegisterDef(145),
+    # AC input type (APL / UPS)
+    "ac_input_type": RegisterDef(209),    # reg 209: AC input type (APL/UPS)
 
-    # SOC limits
-    "on_grid_discharge_soc": RegisterDef(140),
-    "off_grid_discharge_soc": RegisterDef(141),
-    "on_grid_recovery_soc": RegisterDef(185),
-    "off_grid_recovery_soc": RegisterDef(187),
+    # Beeper / LCD
+    "lcd_settings_bitmask": RegisterDef(201),  # reg 201: LCD settings bitmask
+    "beeper_on_off": RegisterDef(207),         # reg 207: Beeper on/off
 
-    # Priority modes
-    "charge_priority": RegisterDef(181),
-    "source_priority": RegisterDef(182),
+    # Battery power settings (percent / limits)
+    "charge_limit": RegisterDef(137),      # reg 137: ChargeRate %
+    "discharge_limit": RegisterDef(138),   # reg 138: DischargeRate %
+    "end_of_charge_soc": RegisterDef(139), # reg 139: Charge Stop SOC (Charge Stop)
+    "ac_charge_enable": RegisterDef(145),  # reg 145: AC Charge Enable
+
+    # AC charge current limit (0.1 A units)
+    "ac_charge_current_limit": RegisterDef(189, 0.1),  # reg 189: AC charge current limit (scale 0.1A)
+
+    # SOC limits / recovery
+    "on_grid_discharge_soc": RegisterDef(140),   # reg 140: Stop Discharge SOC (on-grid)
+    "off_grid_discharge_soc": RegisterDef(141),  # reg 141: Stop Discharge SOC (off-grid)
+    "on_grid_recovery_soc": RegisterDef(185),    # reg 185: On-grid recovery SOC
+    "off_grid_recovery_soc": RegisterDef(187),   # reg 187: Off-grid recovery SOC
+
+    # Smart Load (SecEPS) SOC and voltage thresholds
+    "sec_eps_on_soc": RegisterDef(219),    # reg 219: Smart Load ON SOC (%)
+    "sec_eps_on_vbat": RegisterDef(220, 0.1),   # reg 220: Smart Load ON Vbat (0.1 V) - optional
+    "sec_eps_off_soc": RegisterDef(221),   # reg 221: Smart Load OFF SOC (%)
+    "sec_eps_off_vbat": RegisterDef(222, 0.1),  # reg 222: Smart Load OFF Vbat (0.1 V) - optional
+
+    # Smart Load manual override (if device supports direct manual control)
+    # NOTE: many devices do not have a dedicated "smart load on/off" holding register.
+    # If your device exposes a specific register for manual override, replace the address below
+    # with the correct one. Otherwise implement override by writing a special control flag/register.
+    "smart_load_override": RegisterDef(223),  # reg 223: manual override (reserved / device dependent)
+
+    # Priority modes / charge source
+    "charge_priority": RegisterDef(181),    # reg 181: Charge source priority
+    "source_priority": RegisterDef(182),    # reg 182: Source priority
+
 }
+
+# End of modbus_map

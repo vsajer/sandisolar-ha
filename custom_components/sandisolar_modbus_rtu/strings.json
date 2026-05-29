@@ -5,16 +5,31 @@
         "title": "Configure SANDISOLAR Modbus RTU",
         "description": "Enter connection details for your SANDISOLAR inverter",
         "data": {
-          "name": "Device Name",
           "port": "Serial Port",
           "baudrate": "Baud Rate",
-          "slave_id": "Slave ID",
+          "slave": "Slave ID",
           "update_interval": "Update Interval (seconds)"
         }
       }
     },
     "error": {
-      "cannot_connect": "Failed to connect to device"
+      "cannot_connect": "Failed to connect to device",
+      "invalid_slave": "Slave ID must be between 1 and 247",
+      "invalid_update_interval": "Update interval must be at least 5 seconds"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "SANDISOLAR Modbus RTU Options",
+        "description": "Adjust update interval",
+        "data": {
+          "update_interval": "Update Interval (seconds)"
+        }
+      }
+    },
+    "error": {
+      "invalid_update_interval": "Update interval must be at least 5 seconds"
     }
   }
 }

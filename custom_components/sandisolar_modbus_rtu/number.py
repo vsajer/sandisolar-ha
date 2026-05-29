@@ -1,4 +1,5 @@
 import logging
+
 from homeassistant.components.number import NumberEntity
 from homeassistant.const import (
     UnitOfElectricCurrent,
@@ -13,7 +14,8 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    hub = hass.data[DOMAIN][entry.entry_id]
+    data = hass.data[DOMAIN][entry.entry_id]
+    hub = data["hub"] if isinstance(data, dict) else data
 
     entities = [
         # -------------------------------------------------------------
@@ -22,19 +24,21 @@ async def async_setup_entry(hass, entry, async_add_entities):
         SandiSolarNumber(
             hub,
             "charge_limit",
-            "Charge Limit (%)",
+            "Charge Limit",
             PERCENTAGE,
             0,
             100,
+            1,
             "mdi:battery-charging",
         ),
         SandiSolarNumber(
             hub,
             "discharge_limit",
-            "Discharge Limit (%)",
+            "Discharge Limit",
             PERCENTAGE,
             0,
             100,
+            1,
             "mdi:battery-minus",
         ),
 
@@ -48,6 +52,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
             PERCENTAGE,
             0,
             100,
+            1,
             "mdi:battery-heart",
         ),
 
@@ -57,51 +62,56 @@ async def async_setup_entry(hass, entry, async_add_entities):
         SandiSolarNumber(
             hub,
             "on_grid_discharge_soc",
-            "On‑Grid Discharge SOC",
+            "On-Grid Discharge SOC",
             PERCENTAGE,
             0,
             100,
+            1,
             "mdi:transmission-tower",
         ),
         SandiSolarNumber(
             hub,
             "off_grid_discharge_soc",
-            "Off‑Grid Discharge SOC",
+            "Off-Grid Discharge SOC",
             PERCENTAGE,
             0,
             100,
+            1,
             "mdi:home-lightning-bolt",
         ),
         SandiSolarNumber(
             hub,
             "on_grid_recovery_soc",
-            "On‑Grid Recovery SOC",
+            "On-Grid Recovery SOC",
             PERCENTAGE,
             0,
             100,
+            1,
             "mdi:battery-sync",
         ),
         SandiSolarNumber(
             hub,
             "off_grid_recovery_soc",
-            "Off‑Grid Recovery SOC",
+            "Off-Grid Recovery SOC",
             PERCENTAGE,
             0,
             100,
+            1,
             "mdi:battery-sync",
         ),
 
         # -------------------------------------------------------------
-        # AC Charge Current Limit (0.1 A units)
+        # AC Charge Current Limit
+        # scale řeší modbus_map.py: RegisterDef(189, 0.1)
         # -------------------------------------------------------------
-        SandiSolarScaledNumber(
+        SandiSolarNumber(
             hub,
             "ac_charge_current_limit",
             "AC Charge Current Limit",
             UnitOfElectricCurrent.AMPERE,
             0,
             100,
-            10,  # 0.1A → ×10
+            0.1,
             "mdi:current-ac",
         ),
 
@@ -115,6 +125,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
             PERCENTAGE,
             0,
             100,
+            1,
             "mdi:toggle-switch",
         ),
         SandiSolarNumber(
@@ -124,40 +135,42 @@ async def async_setup_entry(hass, entry, async_add_entities):
             PERCENTAGE,
             0,
             100,
+            1,
             "mdi:toggle-switch-off",
         ),
-        SandiSolarScaledNumber(
+        SandiSolarNumber(
             hub,
             "sec_eps_on_vbat",
             "SecEPS ON Voltage",
             UnitOfElectricPotential.VOLT,
             40,
             60,
-            10,  # 0.1V → ×10
+            0.1,
             "mdi:home-lightning-bolt",
         ),
-        SandiSolarScaledNumber(
+        SandiSolarNumber(
             hub,
             "sec_eps_off_vbat",
             "SecEPS OFF Voltage",
             UnitOfElectricPotential.VOLT,
             40,
             60,
-            10,
+            0.1,
             "mdi:home-lightning-bolt",
         ),
 
         # -------------------------------------------------------------
-        # SecEPS ON PV Power Min (10W units)
+        # SecEPS ON PV Power Min
+        # scale řeší modbus_map.py: RegisterDef(223, 10)
         # -------------------------------------------------------------
-        SandiSolarScaledNumber(
+        SandiSolarNumber(
             hub,
             "sec_eps_on_pv_power_min",
             "SecEPS ON PV Power Min",
             UnitOfPower.WATT,
             0,
             10000,
-            0.1,  # 10W → value/10
+            10,
             "mdi:solar-power",
         ),
     ]
@@ -165,15 +178,23 @@ async def async_setup_entry(hass, entry, async_add_entities):
     async_add_entities(entities)
 
 
-# =====================================================================
-# BASIC NUMBER (no scaling)
-# =====================================================================
-
 class SandiSolarNumber(NumberEntity):
+    """Number entity for SANDISOLAR SD-PRO-EU."""
+
     _attr_has_entity_name = True
     _attr_mode = "slider"
 
-    def __init__(self, hub, key, name, unit, min_value, max_value, icon):
+    def __init__(
+        self,
+        hub,
+        key,
+        name,
+        unit,
+        min_value,
+        max_value,
+        step,
+        icon,
+    ):
         self._hub = hub
         self._key = key
 
@@ -182,7 +203,9 @@ class SandiSolarNumber(NumberEntity):
         self._attr_native_unit_of_measurement = unit
         self._attr_native_min_value = min_value
         self._attr_native_max_value = max_value
+        self._attr_native_step = step
         self._attr_icon = icon
+        self._attr_available = True
 
         self._state = None
 
@@ -192,7 +215,7 @@ class SandiSolarNumber(NumberEntity):
             "identifiers": {("sandisolar_modbus_rtu", "sdproeu_main")},
             "name": "SANDISOLAR SD-PRO-EU",
             "manufacturer": "SANDISOLAR",
-            "model": "SD-PRO-EU 6.5K",
+            "model": "SD-PRO-EU",
         }
 
     @property
@@ -201,62 +224,26 @@ class SandiSolarNumber(NumberEntity):
 
     async def async_update(self):
         val = await self._hub.read_holding_register(self._key)
-        if val is not None:
+
+        if val is None:
+            self._attr_available = False
+            self._state = None
+            return
+
+        self._attr_available = True
+
+        if isinstance(val, float):
+            self._state = round(val, 3)
+        else:
             self._state = int(val)
-        else:
-            self._state = None
 
     async def async_set_native_value(self, value: float):
-        int_value = int(value)
-        await self._hub.write_holding_register(self._key, int_value)
-        self._state = int_value
-        self.async_write_ha_state()
+        ok = await self._hub.write_holding_register(self._key, value)
 
-
-# =====================================================================
-# SCALED NUMBER (for 0.1A, 0.1V, 10W registers)
-# =====================================================================
-
-class SandiSolarScaledNumber(NumberEntity):
-    _attr_has_entity_name = True
-    _attr_mode = "slider"
-
-    def __init__(self, hub, key, name, unit, min_value, max_value, scale, icon):
-        self._hub = hub
-        self._key = key
-        self._scale = scale
-
-        self._attr_name = name
-        self._attr_unique_id = f"sandisolar_number_{key}"
-        self._attr_native_unit_of_measurement = unit
-        self._attr_native_min_value = min_value
-        self._attr_native_max_value = max_value
-        self._attr_icon = icon
-
-        self._state = None
-
-    @property
-    def device_info(self):
-        return {
-            "identifiers": {("sandisolar_modbus_rtu", "sdproeu_main")},
-            "name": "SANDISOLAR SD-PRO-EU",
-            "manufacturer": "SANDISOLAR",
-            "model": "SD-PRO-EU 6.5K",
-        }
-
-    @property
-    def native_value(self):
-        return self._state
-
-    async def async_update(self):
-        val = await self._hub.read_holding_register(self._key)
-        if val is not None:
-            self._state = val / self._scale
+        if ok:
+            self._state = value
+            self._attr_available = True
         else:
-            self._state = None
+            self._attr_available = False
 
-    async def async_set_native_value(self, value: float):
-        raw = int(value * self._scale)
-        await self._hub.write_holding_register(self._key, raw)
-        self._state = value
         self.async_write_ha_state()

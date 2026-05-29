@@ -103,9 +103,9 @@ HOLDING_REGISTERS = {
     "beeper_on_off": RegisterDef(207),
 
     "gen_port_work_mode": RegisterDef(216),
-    "sec_eps_on_soc": RegisterDef(219),
+    "sec_eps_on_soc": RegisterDef(219, 0.01),
     "sec_eps_on_vbat": RegisterDef(220, 0.1),
-    "sec_eps_off_soc": RegisterDef(221),
+    "sec_eps_off_soc": RegisterDef(221, 0.01),
     "sec_eps_off_vbat": RegisterDef(222, 0.1),
     "sec_eps_on_pv_power_min": RegisterDef(223, 10),
 }

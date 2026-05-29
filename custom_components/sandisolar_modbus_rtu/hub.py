@@ -1,130 +1,152 @@
-import asyncio
 import logging
-from typing import Optional, Dict, Any
-
 from pymodbus.client import AsyncModbusSerialClient
 from pymodbus.exceptions import ModbusException
 
-from homeassistant.core import HomeAssistant
-from homeassistant.config_entries import ConfigEntry
-
-from .modbus_map import INPUT_REGISTERS, HOLDING_REGISTERS
+from .const import INPUT_REGISTERS, HOLDING_REGISTERS
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class SandiSolarModbusHub:
-    """Modbus RTU hub for SANDISOLAR SD-PRO-EU using pymodbus 4.x."""
+class SandiSolarHub:
+    """Main Modbus RTU hub for SANDISOLAR SD‑PRO‑EU."""
 
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
-        self.hass = hass
-        self.entry = entry
+    def __init__(self, hass, port, baudrate, slave_id):
+        self._hass = hass
+        self._port = port
+        self._baudrate = baudrate
+        self._slave = slave_id
 
-        self.port = entry.data["port"]
-        self.baudrate = entry.data["baudrate"]
-        self.slave = entry.data["slave"]
-        self.update_interval = entry.data["update_interval"]
+        self._client = None
+        self._cache = {}
 
-        self._client: Optional[AsyncModbusSerialClient] = None
-        self._lock = asyncio.Lock()
-        self._cache: Dict[str, Any] = {}
+    # ------------------------------------------------------------------
+    # INIT & CONNECT
+    # ------------------------------------------------------------------
 
-    async def async_init(self) -> None:
+    async def connect(self):
+        """Initialize Modbus RTU client."""
         self._client = AsyncModbusSerialClient(
-            port=self.port,
-            baudrate=self.baudrate,
+            port=self._port,
+            baudrate=self._baudrate,
             bytesize=8,
             parity="N",
             stopbits=1,
-            timeout=3,
+            timeout=1,
         )
 
-        connected = await self._client.connect()
-        if not connected:
-            raise ModbusException("Cannot open serial port")
-
-        _LOGGER.info("SANDISOLAR: Connected to %s", self.port)
-
-    async def _ensure_connection(self):
+        await self._client.connect()
         if not self._client.connected:
-            await self._client.connect()
+            _LOGGER.error("SANDISOLAR: Modbus connection failed")
+        else:
+            _LOGGER.info("SANDISOLAR: Modbus connected")
 
-    async def read_input_register(self, key: str):
-        reg = INPUT_REGISTERS[key]
+    # ------------------------------------------------------------------
+    # CACHE
+    # ------------------------------------------------------------------
 
-        async with self._lock:
-            await self._ensure_connection()
-            try:
-                self._client.unit_id = self.slave
-                result = await self._client.read_input_registers(
-                    address=reg.address,
-                    count=reg.count,
-                )
-            except Exception as e:
-                _LOGGER.error("Read error %s: %s", key, e)
-                return None
+    def get_cached(self, key):
+        return self._cache.get(key)
 
-        if result.isError():
+    def set_cached(self, key, value):
+        self._cache[key] = value
+
+    # ------------------------------------------------------------------
+    # GENERIC READERS
+    # ------------------------------------------------------------------
+
+    async def _read_registers(self, address, count):
+        """Low-level Modbus read."""
+        if not self._client or not self._client.connected:
             return None
 
-        raw = (
-            (result.registers[0] << 16) | result.registers[1]
-            if reg.count == 2
-            else result.registers[0]
-        )
-
-        if reg.signed:
-            bits = 32 if reg.count == 2 else 16
-            max_val = 1 << (bits - 1)
-            if raw >= max_val:
-                raw -= 1 << bits
-
-        value = raw * reg.scale
-        self._cache[key] = value
-        return value
-
-    async def read_holding_register(self, key: str):
-        reg = HOLDING_REGISTERS[key]
-
-        async with self._lock:
-            await self._ensure_connection()
-            try:
-                self._client.unit_id = self.slave
-                result = await self._client.read_holding_registers(
-                    address=reg.address,
-                    count=reg.count,
-                )
-            except Exception as e:
-                _LOGGER.error("Holding read error %s: %s", key, e)
+        try:
+            rr = await self._client.read_input_registers(
+                address=address,
+                count=count,
+                slave=self._slave
+            )
+            if rr.isError():
                 return None
+            return rr.registers
 
-        if result.isError():
+        except ModbusException as e:
+            _LOGGER.error("SANDISOLAR: Modbus read error: %s", e)
             return None
 
-        raw = result.registers[0]
-        value = raw * reg.scale
-        self._cache[key] = value
-        return value
+    async def _read_holding(self, address, count):
+        """Low-level Modbus read for holding registers."""
+        if not self._client or not self._client.connected:
+            return None
 
-    async def write_holding_register(self, key: str, value: float):
-        reg = HOLDING_REGISTERS[key]
-        raw = int(value / reg.scale)
+        try:
+            rr = await self._client.read_holding_registers(
+                address=address,
+                count=count,
+                slave=self._slave
+            )
+            if rr.isError():
+                return None
+            return rr.registers
 
-        async with self._lock:
-            await self._ensure_connection()
-            try:
-                self._client.unit_id = self.slave
-                result = await self._client.write_register(
-                    address=reg.address,
-                    value=raw,
-                )
-            except Exception as e:
-                _LOGGER.error("Write error %s: %s", key, e)
-                return False
+        except ModbusException as e:
+            _LOGGER.error("SANDISOLAR: Modbus holding read error: %s", e)
+            return None
 
-        return not result.isError()
+    # ------------------------------------------------------------------
+    # HIGH-LEVEL READERS
+    # ------------------------------------------------------------------
 
-    async def close(self):
-        if self._client:
-            await self._client.close()
-            self._client = None
+    async def read_input_register(self, key):
+        """Read and scale INPUT register."""
+        reg = INPUT_REGISTERS.get(key)
+        if not reg:
+            _LOGGER.warning("SANDISOLAR: Unknown input register key '%s'", key)
+            return None
+
+        raw = await self._read_registers(reg.address, reg.count)
+        if raw is None:
+            return None
+
+        value = self._decode(raw, reg.signed)
+        return value * reg.scale
+
+    async def read_holding_register(self, key):
+        """Read and scale HOLDING register."""
+        reg = HOLDING_REGISTERS.get(key)
+        if not reg:
+            _LOGGER.warning("SANDISOLAR: Unknown holding register key '%s'", key)
+            return None
+
+        raw = await self._read_holding(reg.address, reg.count)
+        if raw is None:
+            return None
+
+        value = self._decode(raw, reg.signed)
+        scaled = value * reg.scale
+
+        # Cache device info
+        if key in ("device_name", "device_model"):
+            self.set_cached(key, scaled)
+
+        return scaled
+
+    # ------------------------------------------------------------------
+    # DECODER
+    # ------------------------------------------------------------------
+
+    def _decode(self, registers, signed):
+        """Decode 1–2 register values."""
+        if len(registers) == 1:
+            val = registers[0]
+            if signed and val > 32767:
+                val -= 65536
+            return val
+
+        if len(registers) == 2:
+            high, low = registers
+            val = (high << 16) | low
+            if signed and val > 0x7FFFFFFF:
+                val -= 0x100000000
+            return val
+
+        return 0

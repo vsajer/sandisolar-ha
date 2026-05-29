@@ -7,7 +7,7 @@ from .const import INPUT_REGISTERS, HOLDING_REGISTERS
 _LOGGER = logging.getLogger(__name__)
 
 
-class SandiSolarHub:
+class SandiSolarModbusHub:
     """Main Modbus RTU hub for SANDISOLAR SD‑PRO‑EU."""
 
     def __init__(self, hass, port, baudrate, slave_id):
@@ -55,7 +55,7 @@ class SandiSolarHub:
     # ------------------------------------------------------------------
 
     async def _read_registers(self, address, count):
-        """Low-level Modbus read."""
+        """Low-level Modbus read for INPUT registers."""
         if not self._client or not self._client.connected:
             return None
 
@@ -74,7 +74,7 @@ class SandiSolarHub:
             return None
 
     async def _read_holding(self, address, count):
-        """Low-level Modbus read for holding registers."""
+        """Low-level Modbus read for HOLDING registers."""
         if not self._client or not self._client.connected:
             return None
 
@@ -129,6 +129,43 @@ class SandiSolarHub:
             self.set_cached(key, scaled)
 
         return scaled
+
+    # ------------------------------------------------------------------
+    # WRITE HOLDING REGISTER
+    # ------------------------------------------------------------------
+
+    async def write_holding_register(self, key, value):
+        """Write scaled value to a holding register."""
+        reg = HOLDING_REGISTERS.get(key)
+        if not reg:
+            _LOGGER.warning("SANDISOLAR: Unknown holding register key '%s'", key)
+            return False
+
+        if not self._client or not self._client.connected:
+            _LOGGER.error("SANDISOLAR: Cannot write, Modbus not connected")
+            return False
+
+        # Reverse scale (HA → raw)
+        try:
+            raw_value = int(value / reg.scale)
+        except Exception:
+            raw_value = int(value)
+
+        try:
+            rq = await self._client.write_register(
+                address=reg.address,
+                value=raw_value,
+                slave=self._slave
+            )
+            if rq.isError():
+                _LOGGER.error("SANDISOLAR: Write error for %s", key)
+                return False
+
+            return True
+
+        except Exception as e:
+            _LOGGER.error("SANDISOLAR: Exception during write: %s", e)
+            return False
 
     # ------------------------------------------------------------------
     # DECODER

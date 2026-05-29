@@ -10,7 +10,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
     entities = [
         # -------------------------------------------------------------
-        # Core inverter switches (0/1)
+        # Core inverter switches (existují v HOLDING_REGISTERS)
         # -------------------------------------------------------------
         SandiSolarSwitch(hub, "inverter_on_off", "Inverter On/Off", "mdi:power"),
         SandiSolarSwitch(hub, "ac_charge_enable", "AC Charge Enable", "mdi:transmission-tower"),
@@ -19,9 +19,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
         SandiSolarSwitch(hub, "ups_enable", "UPS Mode", "mdi:car-battery"),
 
         # -------------------------------------------------------------
-        # Additional binary features (0/1)
+        # Additional binary features (NEEXISTUJÍ, ale zachováváme je)
         # -------------------------------------------------------------
-        SandiSolarSwitch(hub, "beeper_enable", "Beeper", "mdi:volume-high"),
+        SandiSolarSwitch(hub, "beeper_on_off", "Beeper", "mdi:volume-high"),
         SandiSolarSwitch(hub, "grid_charge_enable", "Grid Charge Enable", "mdi:transmission-tower-import"),
         SandiSolarSwitch(hub, "pv_wakeup_enable", "PV Wake‑Up Enable", "mdi:weather-sunny-alert"),
     ]
@@ -69,8 +69,15 @@ class SandiSolarSwitch(SwitchEntity):
 
     async def async_update(self):
         """Read the holding register value."""
-        val = await self._hub.read_holding_register(self._key)
+        try:
+            val = await self._hub.read_holding_register(self._key)
+        except Exception as e:
+            _LOGGER.error("SANDISOLAR: Switch read error for %s: %s", self._key, e)
+            self._state = False
+            return
+
         if val is None:
+            # Register does not exist → keep switch but disable it
             self._state = False
         else:
             self._state = bool(val)
@@ -80,11 +87,13 @@ class SandiSolarSwitch(SwitchEntity):
     # -----------------------------------------------------
 
     async def async_turn_on(self):
-        await self._hub.write_holding_register(self._key, 1)
-        self._state = True
+        ok = await self._hub.write_holding_register(self._key, 1)
+        if ok:
+            self._state = True
         self.async_write_ha_state()
 
     async def async_turn_off(self):
-        await self._hub.write_holding_register(self._key, 0)
-        self._state = False
+        ok = await self._hub.write_holding_register(self._key, 0)
+        if ok:
+            self._state = False
         self.async_write_ha_state()

@@ -7,7 +7,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 
-from . import DOMAIN
+from .const import DOMAIN
 from .hub import SandiSolarModbusHub
 
 
@@ -21,14 +21,22 @@ async def async_get_config_entry_diagnostics(
     diagnostics: dict[str, Any] = {
         "port": hub.port,
         "baudrate": hub.baudrate,
-        "slave_id": hub.slave_id,
+        "slave": hub.slave,
         "update_interval": hub.update_interval,
+        "connected": getattr(hub._client, "connected", False),
     }
 
-    try:
-        dump = await hub.dump_all_registers()
-        diagnostics["registers"] = dump
-    except Exception as err:
-        diagnostics["registers_error"] = str(err)
+    # ---------------------------------------------------------
+    # SAFE REGISTER DUMP (only if hub implements it)
+    # ---------------------------------------------------------
+
+    if hasattr(hub, "dump_all_registers"):
+        try:
+            dump = await hub.dump_all_registers()
+            diagnostics["registers"] = dump
+        except Exception as err:
+            diagnostics["registers_error"] = str(err)
+    else:
+        diagnostics["registers"] = "dump_all_registers() not implemented"
 
     return diagnostics

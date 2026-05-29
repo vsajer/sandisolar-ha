@@ -372,7 +372,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         BmsSimpleSensor(hub, "bms_max_discharge_current", "Battery_Max_Discharge_Current",
                         UnitOfElectricCurrent.AMPERE, "mdi:battery-minus", decimals=1),
     ]
-    # Device info sensors
+ # Device info sensors
     entities += [
         SimpleSensor(hub, "device_model", "Device_Model",
                      None, None, "mdi:identifier", decimals=0),
@@ -383,29 +383,4 @@ async def async_setup_entry(hass, entry, async_add_entities):
         SimpleSensor(hub, "total_work_time", "Total_Work_Time",
                      "h", None, "mdi:clock-time-eight", decimals=0),
     ]
-    # Firmware sensors
-    entities += [
-        SimpleSensor(hub, "fw_main_version", "FW_Main_Version",
-                     None, None, "mdi:chip", decimals=0),
-
-        SimpleSensor(hub, "fw_arm_name", "FW_ARM_Name",
-                     None, None, "mdi:chip", decimals=0),
-        SimpleSensor(hub, "fw_arm_version", "FW_ARM_Version",
-                     None, None, "mdi:chip", decimals=0),
-
-        SimpleSensor(hub, "fw_dsp_name", "FW_DSP_Name",
-                     None, None, "mdi:chip", decimals=0),
-        SimpleSensor(hub, "fw_dsp1_version", "FW_DSP1_Version",
-                     None, None, "mdi:chip", decimals=0),
-        SimpleSensor(hub, "fw_dsp2_version", "FW_DSP2_Version",
-                     None, None, "mdi:chip", decimals=0),
-
-        SimpleSensor(hub, "fw_dsp1_debug", "FW_DSP1_Debug",
-                     None, None, "mdi:chip", decimals=0),
-        SimpleSensor(hub, "fw_dsp2_debug", "FW_DSP2_Debug",
-                     None, None, "mdi:chip", decimals=0),
-        SimpleSensor(hub, "fw_arm_debug", "FW_ARM_Debug",
-                     None, None, "mdi:chip", decimals=0),
-    ]
-
     async_add_entities(entities)

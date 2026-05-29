@@ -1,6 +1,11 @@
 import logging
 from homeassistant.components.number import NumberEntity
-from homeassistant.const import UnitOfElectricCurrent, PERCENTAGE, UnitOfElectricPotential, UnitOfPower
+from homeassistant.const import (
+    UnitOfElectricCurrent,
+    PERCENTAGE,
+    UnitOfElectricPotential,
+    UnitOfPower,
+)
 
 from .const import DOMAIN
 
@@ -12,13 +17,13 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
     entities = [
         # -------------------------------------------------------------
-        # Charge / Discharge Current Limits (A)
+        # Charge / Discharge Limits (%)
         # -------------------------------------------------------------
         SandiSolarNumber(
             hub,
             "charge_limit",
-            "Charge Current Limit",
-            UnitOfElectricCurrent.AMPERE,
+            "Charge Limit (%)",
+            PERCENTAGE,
             0,
             100,
             "mdi:battery-charging",
@@ -26,8 +31,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
         SandiSolarNumber(
             hub,
             "discharge_limit",
-            "Discharge Current Limit",
-            UnitOfElectricCurrent.AMPERE,
+            "Discharge Limit (%)",
+            PERCENTAGE,
             0,
             100,
             "mdi:battery-minus",
@@ -95,8 +100,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
             "AC Charge Current Limit",
             UnitOfElectricCurrent.AMPERE,
             0,
-            50,
-            10,  # scale factor (0.1A → ×10)
+            100,
+            10,  # 0.1A → ×10
             "mdi:current-ac",
         ),
 
@@ -198,6 +203,8 @@ class SandiSolarNumber(NumberEntity):
         val = await self._hub.read_holding_register(self._key)
         if val is not None:
             self._state = int(val)
+        else:
+            self._state = None
 
     async def async_set_native_value(self, value: float):
         int_value = int(value)
@@ -245,6 +252,8 @@ class SandiSolarScaledNumber(NumberEntity):
         val = await self._hub.read_holding_register(self._key)
         if val is not None:
             self._state = val / self._scale
+        else:
+            self._state = None
 
     async def async_set_native_value(self, value: float):
         raw = int(value * self._scale)

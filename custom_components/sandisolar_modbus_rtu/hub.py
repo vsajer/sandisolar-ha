@@ -26,14 +26,10 @@ class SandiSolarModbusHub:
         self._lock = asyncio.Lock()
         self._cache: Dict[str, Any] = {}
 
-    # -------------------------------------------------------------------------
-    # INIT
-    # -------------------------------------------------------------------------
-
     async def async_init(self) -> None:
         """Initialize and connect Modbus client."""
         _LOGGER.info(
-            "SANDISOLAR: Initializing Modbus client on %s @ %s baud (slave %s)",
+            "SANDISOLAR: Initializing Modbus RTU on %s @ %s baud, slave %s",
             self.port,
             self.baudrate,
             self.slave,
@@ -48,17 +44,19 @@ class SandiSolarModbusHub:
             timeout=3,
         )
 
-        connected = await self._client.connect()
+        try:
+            connected = await self._client.connect()
+        except Exception as err:
+            self._client = None
+            raise ModbusException(
+                f"SANDISOLAR: Cannot connect to serial port {self.port}: {err}"
+            ) from err
 
         if not connected or not getattr(self._client, "connected", False):
             self._client = None
             raise ModbusException(f"SANDISOLAR: Cannot open serial port {self.port}")
 
         _LOGGER.info("SANDISOLAR: Connected to %s", self.port)
-
-    # -------------------------------------------------------------------------
-    # CLOSE
-    # -------------------------------------------------------------------------
 
     async def close(self) -> None:
         """Safely close Modbus client."""
@@ -76,25 +74,28 @@ class SandiSolarModbusHub:
                 if asyncio.iscoroutine(result):
                     await result
 
-        except Exception as e:
-            _LOGGER.warning("SANDISOLAR: Error closing Modbus: %s", e)
+        except Exception as err:
+            _LOGGER.warning("SANDISOLAR: Error closing Modbus client: %s", err)
 
         self._client = None
         _LOGGER.info("SANDISOLAR: Modbus client closed")
 
-    # -------------------------------------------------------------------------
-    # INTERNAL HELPERS
-    # -------------------------------------------------------------------------
-
     async def _ensure_connection(self) -> None:
         """Ensure client exists and is connected."""
         if self._client is None:
-            raise ModbusException("SANDISOLAR: Modbus client not initialized")
+            _LOGGER.warning("SANDISOLAR: Modbus client missing, recreating...")
+            await self.async_init()
+            return
 
         if not getattr(self._client, "connected", False):
-            _LOGGER.warning("SANDISOLAR: Modbus client disconnected, reconnecting...")
+            _LOGGER.warning("SANDISOLAR: Modbus disconnected, reconnecting...")
 
-            connected = await self._client.connect()
+            try:
+                connected = await self._client.connect()
+            except Exception as err:
+                raise ModbusException(
+                    f"SANDISOLAR: Reconnect failed on {self.port}: {err}"
+                ) from err
 
             if not connected or not getattr(self._client, "connected", False):
                 raise ModbusException("SANDISOLAR: Failed to reconnect Modbus client")
@@ -102,10 +103,6 @@ class SandiSolarModbusHub:
     def get_cached(self, key: str) -> Optional[Any]:
         """Return cached value."""
         return self._cache.get(key)
-
-    # -------------------------------------------------------------------------
-    # INPUT REGISTERS
-    # -------------------------------------------------------------------------
 
     async def read_input_register(self, key: str) -> Optional[float]:
         """Read one defined input register by key."""
@@ -125,23 +122,29 @@ class SandiSolarModbusHub:
                     slave=self.slave,
                 )
 
-            except Exception as e:
-                _LOGGER.error("SANDISOLAR: Read error %s: %s", key, e)
+            except Exception as err:
+                _LOGGER.error("SANDISOLAR: Input read error %s: %s", key, err)
                 return None
 
-        if result is None or result.isError():
-            _LOGGER.debug("SANDISOLAR: Read returned error for %s", key)
+        if result is None:
+            _LOGGER.debug("SANDISOLAR: Input read returned None for %s", key)
             return None
 
-        raw = self._decode(result.registers, reg.signed)
+        if result.isError():
+            _LOGGER.debug("SANDISOLAR: Input read Modbus error for %s: %s", key, result)
+            return None
+
+        registers = getattr(result, "registers", None)
+
+        if not registers:
+            _LOGGER.debug("SANDISOLAR: Input read empty registers for %s", key)
+            return None
+
+        raw = self._decode(registers, reg.signed)
         value = raw * reg.scale
 
         self._cache[key] = value
         return value
-
-    # -------------------------------------------------------------------------
-    # HOLDING REGISTERS READ
-    # -------------------------------------------------------------------------
 
     async def read_holding_register(self, key: str) -> Optional[float]:
         """Read one defined holding register by key."""
@@ -161,23 +164,29 @@ class SandiSolarModbusHub:
                     slave=self.slave,
                 )
 
-            except Exception as e:
-                _LOGGER.error("SANDISOLAR: Holding read error %s: %s", key, e)
+            except Exception as err:
+                _LOGGER.error("SANDISOLAR: Holding read error %s: %s", key, err)
                 return None
 
-        if result is None or result.isError():
-            _LOGGER.debug("SANDISOLAR: Holding read returned error for %s", key)
+        if result is None:
+            _LOGGER.debug("SANDISOLAR: Holding read returned None for %s", key)
             return None
 
-        raw = self._decode(result.registers, reg.signed)
+        if result.isError():
+            _LOGGER.debug("SANDISOLAR: Holding read Modbus error for %s: %s", key, result)
+            return None
+
+        registers = getattr(result, "registers", None)
+
+        if not registers:
+            _LOGGER.debug("SANDISOLAR: Holding read empty registers for %s", key)
+            return None
+
+        raw = self._decode(registers, reg.signed)
         value = raw * reg.scale
 
         self._cache[key] = value
         return value
-
-    # -------------------------------------------------------------------------
-    # HOLDING REGISTERS WRITE
-    # -------------------------------------------------------------------------
 
     async def write_holding_register(self, key: str, value: float) -> bool:
         """Write one defined holding register by key."""
@@ -202,31 +211,45 @@ class SandiSolarModbusHub:
                     slave=self.slave,
                 )
 
-            except Exception as e:
-                _LOGGER.error("SANDISOLAR: Write error %s: %s", key, e)
+            except Exception as err:
+                _LOGGER.error(
+                    "SANDISOLAR: Holding write error %s=%s raw=%s: %s",
+                    key,
+                    value,
+                    raw,
+                    err,
+                )
                 return False
 
-        if result is None or result.isError():
-            _LOGGER.debug("SANDISOLAR: Write returned error for %s", key)
+        if result is None:
+            _LOGGER.debug("SANDISOLAR: Holding write returned None for %s", key)
+            return False
+
+        if result.isError():
+            _LOGGER.debug("SANDISOLAR: Holding write Modbus error for %s: %s", key, result)
             return False
 
         self._cache[key] = value
         return True
 
-    # -------------------------------------------------------------------------
-    # DECODER
-    # -------------------------------------------------------------------------
-
     def _decode(self, registers, signed):
-        """Decode 16-bit or 32-bit Modbus register values."""
+        """Decode 16-bit or 32-bit Modbus values.
+
+        SANDISOLAR documentation uses High/Low order:
+        - 250 = PpvAll H
+        - 251 = PpvAll L
+        - 328 = Pactogrid total H
+        - 329 = Pactogrid total L
+        """
+
         if not registers:
             return 0
 
         if len(registers) == 1:
             val = registers[0]
 
-            if signed and val > 32767:
-                val -= 65536
+            if signed and val > 0x7FFF:
+                val -= 0x10000
 
             return val
 
@@ -239,4 +262,8 @@ class SandiSolarModbusHub:
 
             return val
 
-        return 0
+        val = 0
+        for register in registers:
+            val = (val << 16) | register
+
+        return val

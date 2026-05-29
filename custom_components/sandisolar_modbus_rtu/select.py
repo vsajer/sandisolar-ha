@@ -32,6 +32,19 @@ GEN_PORT_WORK_MODE_OPTIONS = {
 }
 
 # ---------------------------------------------------------
+# LCD BITMASK OPTIONS (reg 201)
+# ---------------------------------------------------------
+
+LCD_OPTIONS = {
+    "Default (Auto‑Off + Touch Wake‑Up)": 1 | 8,   # 9
+    "LCD Always‑On": 2,
+    "LCD Sleep Mode": 4,
+    "Touch Wake‑Up only": 8,
+    "All Off": 0,
+    "All On": 1 | 2 | 4 | 8,  # 15
+}
+
+# ---------------------------------------------------------
 # SETUP
 # ---------------------------------------------------------
 
@@ -60,6 +73,13 @@ async def async_setup_entry(hass, entry, async_add_entities):
             GEN_PORT_WORK_MODE_OPTIONS,
             "mdi:dip-switch"
         ),
+        SandiSolarSelect(
+            hub,
+            "lcd_settings",
+            "LCD Settings",
+            LCD_OPTIONS,
+            "mdi:monitor"
+        ),
     ]
 
     async_add_entities(entities)
@@ -85,10 +105,6 @@ class SandiSolarSelect(SelectEntity):
 
         self._state = None
 
-    # -----------------------------------------------------
-    # DEVICE INFO
-    # -----------------------------------------------------
-
     @property
     def device_info(self):
         return {
@@ -97,10 +113,6 @@ class SandiSolarSelect(SelectEntity):
             "manufacturer": "SANDISOLAR",
             "model": "SD-PRO-EU 6.5K",
         }
-
-    # -----------------------------------------------------
-    # CURRENT OPTION
-    # -----------------------------------------------------
 
     @property
     def current_option(self):
@@ -113,19 +125,11 @@ class SandiSolarSelect(SelectEntity):
 
         return None
 
-    # -----------------------------------------------------
-    # UPDATE (READ)
-    # -----------------------------------------------------
-
     async def async_update(self):
         """Read holding register value."""
         val = await self._hub.read_holding_register(self._key)
         if val is not None:
             self._state = int(val)
-
-    # -----------------------------------------------------
-    # WRITE
-    # -----------------------------------------------------
 
     async def async_select_option(self, option: str):
         """Write new value to holding register."""

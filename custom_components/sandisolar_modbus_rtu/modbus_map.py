@@ -40,8 +40,15 @@ INPUT_REGISTERS = {
     # -------------------------
     "eps_voltage": RegisterDef(55, 0.1),
     "eps_current": RegisterDef(56, 0.1),
-    "eps_active_power": RegisterDef(334, 0.1, count=2),
+
+    "eps_power": RegisterDef(320, 0.1, count=2),
+    "eps_local_load_power": RegisterDef(330, 0.1, count=2),
+
     "eps_apparent_power": RegisterDef(332, 0.1, count=2),
+    "eps_active_power": RegisterDef(334, 0.1, count=2),
+
+    "eps_energy_today": RegisterDef(407, 0.1, count=2),
+    "eps_energy_total": RegisterDef(409, 0.1, count=2),
 
     # -------------------------
     # PV
@@ -99,7 +106,7 @@ INPUT_REGISTERS = {
     # -------------------------
     # TOTAL WORK TIME
     # -------------------------
-    "total_work_time": RegisterDef(107, scale=0.5, count=2),  # 0.5 min units
+    "total_work_time": RegisterDef(107, scale=1, count=2),
 }
 
 

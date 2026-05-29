@@ -1,10 +1,16 @@
 {
   "domain": "sandisolar_modbus_rtu",
-  "name": "SANDISOLAR SD-PRO-EU Modbus RTU",
-  "version": "1.0.0",
-  "config_flow": true,
-  "requirements": [],
-  "dependencies": [],
+  "name": "SANDISOLAR Modbus RTU",
+  "version": "2.0.0",
+  "documentation": "https://github.com/yourrepo/sandisolar_modbus_rtu",
+  "issue_tracker": "https://github.com/yourrepo/sandisolar_modbus_rtu/issues",
+  "requirements": [
+    "pymodbus==3.2.11"
+  ],
   "codeowners": [],
-  "iot_class": "local_polling"
+  "config_flow": true,
+  "iot_class": "local_polling",
+  "loggers": [
+    "pymodbus"
+  ]
 }

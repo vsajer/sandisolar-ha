@@ -36,12 +36,12 @@ GEN_PORT_WORK_MODE_OPTIONS = {
 # ---------------------------------------------------------
 
 LCD_OPTIONS = {
-    "Default (Auto‑Off + Touch Wake‑Up)": 1 | 8,   # 9
+    "Default (Auto‑Off + Touch Wake‑Up)": 9,   # bits 0 + 3
     "LCD Always‑On": 2,
     "LCD Sleep Mode": 4,
     "Touch Wake‑Up only": 8,
     "All Off": 0,
-    "All On": 1 | 2 | 4 | 8,  # 15
+    "All On": 15,
 }
 
 # ---------------------------------------------------------
@@ -75,7 +75,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         ),
         SandiSolarSelect(
             hub,
-            "lcd_settings",
+            "lcd_settings_bitmask",
             "LCD Settings",
             LCD_OPTIONS,
             "mdi:monitor"
@@ -127,13 +127,21 @@ class SandiSolarSelect(SelectEntity):
 
     async def async_update(self):
         """Read holding register value."""
-        val = await self._hub.read_holding_register(self._key)
+        try:
+            val = await self._hub.read_holding_register(self._key)
+        except Exception as e:
+            _LOGGER.error("SANDISOLAR: Select read error for %s: %s", self._key, e)
+            return
+
         if val is not None:
             self._state = int(val)
 
     async def async_select_option(self, option: str):
         """Write new value to holding register."""
         value = self._mapping[option]
-        await self._hub.write_holding_register(self._key, value)
-        self._state = value
+
+        ok = await self._hub.write_holding_register(self._key, value)
+        if ok:
+            self._state = value
+
         self.async_write_ha_state()

@@ -153,11 +153,12 @@ HOLDING_REGISTERS = {
     "off_grid_recovery_soc": RegisterDef(187),   # reg 187: Off-grid recovery SOC
 
     # Smart Load (SecEPS) SOC and voltage thresholds
+    "gen_port_work_mode": RegisterDef(216),
     "sec_eps_on_soc": RegisterDef(219),    # reg 219: Smart Load ON SOC (%)
     "sec_eps_on_vbat": RegisterDef(220, 0.1),   # reg 220: Smart Load ON Vbat (0.1 V) - optional
     "sec_eps_off_soc": RegisterDef(221),   # reg 221: Smart Load OFF SOC (%)
     "sec_eps_off_vbat": RegisterDef(222, 0.1),  # reg 222: Smart Load OFF Vbat (0.1 V) - optional
-
+    "sec_eps_on_pv_power_min": RegisterDef(223, 10),  # jednotka 10W
     # Smart Load manual override (if device supports direct manual control)
     # NOTE: many devices do not have a dedicated "smart load on/off" holding register.
     # If your device exposes a specific register for manual override, replace the address below

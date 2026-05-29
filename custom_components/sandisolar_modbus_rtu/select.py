@@ -1,12 +1,11 @@
 import logging
+
 from homeassistant.components.select import SelectEntity
+
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-# ---------------------------------------------------------
-# OPTIONS MAPPING (label → register value)
-# ---------------------------------------------------------
 
 SOURCE_PRIORITY_OPTIONS = {
     "SOL – Solar First": 0,
@@ -16,7 +15,7 @@ SOURCE_PRIORITY_OPTIONS = {
 }
 
 CHARGE_PRIORITY_OPTIONS = {
-    "CSO – Charge Solar Only": 0,
+    "CSO – Solar Only": 0,
     "SNU – Solar → Utility": 1,
     "OSO – Utility → Solar": 2,
 }
@@ -26,30 +25,24 @@ GEN_PORT_WORK_MODE_OPTIONS = {
     "1 – Generator Enable": 1,
     "2 – Generator Force": 2,
     "3 – SmartLoad Output": 3,
-    "4 – On Grid always on": 4,
-    "5 – Off Grid immediately off": 5,
-    "6 – AC Couple on SecEPS side": 6,
+    "4 – On Grid Always On": 4,
+    "5 – Off Grid Immediately Off": 5,
+    "6 – AC Couple on SecEPS Side": 6,
 }
 
-# ---------------------------------------------------------
-# LCD BITMASK OPTIONS (reg 201)
-# ---------------------------------------------------------
-
 LCD_OPTIONS = {
-    "Default (Auto‑Off + Touch Wake‑Up)": 9,   # bits 0 + 3
-    "LCD Always‑On": 2,
-    "LCD Sleep Mode": 4,
-    "Touch Wake‑Up only": 8,
     "All Off": 0,
+    "LCD Always On": 2,
+    "LCD Sleep Mode": 4,
+    "Touch Wake-Up Only": 8,
+    "Default Auto-Off + Touch Wake-Up": 9,
     "All On": 15,
 }
 
-# ---------------------------------------------------------
-# SETUP
-# ---------------------------------------------------------
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    hub = hass.data[DOMAIN][entry.entry_id]
+    data = hass.data[DOMAIN][entry.entry_id]
+    hub = data["hub"] if isinstance(data, dict) else data
 
     entities = [
         SandiSolarSelect(
@@ -57,36 +50,33 @@ async def async_setup_entry(hass, entry, async_add_entities):
             "source_priority",
             "Source Priority",
             SOURCE_PRIORITY_OPTIONS,
-            "mdi:solar-power"
+            "mdi:solar-power",
         ),
         SandiSolarSelect(
             hub,
             "charge_priority",
             "Charge Priority",
             CHARGE_PRIORITY_OPTIONS,
-            "mdi:battery-charging"
+            "mdi:battery-charging",
         ),
         SandiSolarSelect(
             hub,
             "gen_port_work_mode",
             "GEN Port Work Mode",
             GEN_PORT_WORK_MODE_OPTIONS,
-            "mdi:dip-switch"
+            "mdi:dip-switch",
         ),
         SandiSolarSelect(
             hub,
             "lcd_settings_bitmask",
             "LCD Settings",
             LCD_OPTIONS,
-            "mdi:monitor"
+            "mdi:monitor",
         ),
     ]
 
     async_add_entities(entities)
 
-# ---------------------------------------------------------
-# ENTITY CLASS
-# ---------------------------------------------------------
 
 class SandiSolarSelect(SelectEntity):
     """Select entity for SANDISOLAR SD-PRO-EU."""
@@ -102,6 +92,7 @@ class SandiSolarSelect(SelectEntity):
         self._attr_unique_id = f"sandisolar_select_{key}"
         self._attr_options = list(mapping.keys())
         self._attr_icon = icon
+        self._attr_available = True
 
         self._state = None
 
@@ -111,7 +102,7 @@ class SandiSolarSelect(SelectEntity):
             "identifiers": {("sandisolar_modbus_rtu", "sdproeu_main")},
             "name": "SANDISOLAR SD-PRO-EU",
             "manufacturer": "SANDISOLAR",
-            "model": "SD-PRO-EU 6.5K",
+            "model": "SD-PRO-EU",
         }
 
     @property
@@ -126,22 +117,33 @@ class SandiSolarSelect(SelectEntity):
         return None
 
     async def async_update(self):
-        """Read holding register value."""
-        try:
-            val = await self._hub.read_holding_register(self._key)
-        except Exception as e:
-            _LOGGER.error("SANDISOLAR: Select read error for %s: %s", self._key, e)
+        val = await self._hub.read_holding_register(self._key)
+
+        if val is None:
+            self._attr_available = False
+            self._state = None
             return
 
-        if val is not None:
-            self._state = int(val)
+        self._attr_available = True
+        self._state = int(val)
 
     async def async_select_option(self, option: str):
-        """Write new value to holding register."""
+        if option not in self._mapping:
+            _LOGGER.error(
+                "SANDISOLAR: Invalid select option %s for %s",
+                option,
+                self._key,
+            )
+            return
+
         value = self._mapping[option]
 
         ok = await self._hub.write_holding_register(self._key, value)
+
         if ok:
             self._state = value
+            self._attr_available = True
+        else:
+            self._attr_available = False
 
         self.async_write_ha_state()

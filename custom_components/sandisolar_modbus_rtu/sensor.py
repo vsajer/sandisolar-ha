@@ -130,8 +130,13 @@ class WorkTimeSensor(BaseSandiSensor):
             self._attr_native_value = None
             return
 
-        hours = (val * 0.5) / 60
-        self._attr_native_value = round(hours, 1)
+        total_minutes = int(val * 0.5)
+
+        days = total_minutes // 1440
+        hours = (total_minutes % 1440) // 60
+        minutes = total_minutes % 60
+
+        self._attr_native_value = f"{days}d {hours}h {minutes}m"
 
 
 class FaultWord0TextSensor(BaseSandiSensor):

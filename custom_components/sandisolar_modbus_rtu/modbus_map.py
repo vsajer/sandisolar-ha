@@ -15,7 +15,7 @@ INPUT_REGISTERS = {
     "inv_temp": RegisterDef(10, 0.1, signed=True),
     "boost_temp": RegisterDef(11, 0.1, signed=True),
     "llc_temp": RegisterDef(12, 0.1, signed=True),
-    "battery_temp": RegisterDef(13, 0.1, signed=True),
+    "battery_temp": RegisterDef(142, 0.1, signed=True),
     "ambient_temp": RegisterDef(14, 0.1, signed=True),
 
     "fault_word0": RegisterDef(24),
@@ -29,8 +29,7 @@ INPUT_REGISTERS = {
 
     "eps_voltage": RegisterDef(55, 0.1),
     "eps_current": RegisterDef(56, 0.1),
-    "eps_power": RegisterDef(320, 0.1, count=2),
-    "eps_local_load_power": RegisterDef(330, 0.1, count=2),
+    "eps_power": RegisterDef(330, 0.1, count=2),
     "eps_apparent_power": RegisterDef(332, 0.1, count=2),
     "eps_active_power": RegisterDef(334, 0.1, count=2),
     "eps_energy_today": RegisterDef(407, 0.1, count=2),

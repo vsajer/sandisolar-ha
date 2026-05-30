@@ -389,8 +389,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
         EnergySensor(hub, "energy_sold_total", "Energy Sold Total", "mdi:cash-plus"),
         EnergySensor(hub, "energy_bought_today", "Energy Bought Today", "mdi:cash-minus"),
         EnergySensor(hub, "energy_bought_total", "Energy Bought Total", "mdi:cash-minus"),
-        EnergySensor(hub, "self_to_load_today", "Self To Load Today", "mdi:home-lightning-bolt"),
-        EnergySensor(hub, "self_to_load_total", "Self To Load Total", "mdi:home-lightning-bolt"),
+        EnergySensor(hub, "energy_self_to_load_today", "Energy Self To Load Today", "mdi:home-lightning-bolt"),
+        EnergySensor(hub, "energy_self_to_load_total", "Energy Self To Load Total", "mdi:home-lightning-bolt"),
 
         SimpleSensor(hub, "eps_voltage", "EPS Voltage",
                      UnitOfElectricPotential.VOLT, SensorDeviceClass.VOLTAGE, "mdi:home-lightning-bolt", 1),

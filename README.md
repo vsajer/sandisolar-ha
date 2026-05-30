@@ -1,200 +1,177 @@
 SANDISOLAR / SD‑PRO‑EU – Modbus RTU Integration for Home Assistant
 Hybridní měnič SANDISOLAR SD‑PRO‑EU konečně v Home Assistantu — přesné hodnoty, rychlá odezva, plná kontrola.
+![SANDISOLAR + Home Assistant](docs/images/banner.png)
 
-![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)
-![Version](https://img.shields.io/github/v/release/vsajer/sandisolar-ha)
-![Downloads](https://img.shields.io/github/downloads/vsajer/sandisolar-ha/total)
-![License](https://img.shields.io/github/license/vsajer/sandisolar-ha)
+[![HACS](https://img.shields.io/badge/HACS-Custom-blue.svg)]()
+[![Version](https://img.shields.io/github/v/release/vsajer/sandisolar-ha)]()
+[![License](https://img.shields.io/github/license/vsajer/sandisolar-ha)]()
 
-Hybridní měnič **SANDISOLAR SD‑PRO‑EU** konečně v Home Assistantu — přesné hodnoty, rychlá odezva, plná kontrola.
+Native Home Assistant integration for the **SANDISOLAR SD-PRO-EU Hybrid Inverter** using **Modbus RTU (RS485)**.
 
-🟢 Features / Funkce
-English
-Monitoring
-PV voltage, current, power
-
-Battery voltage, current, SOC
-
-Grid voltage, frequency, power
-
-Load power
-
-Control
-Inverter ON/OFF
-
-AC charge enable
-
-Battery discharge enable
-
-SOC limits
-
-AC charge current
-
-Česky
-Monitoring
-FV napětí, proud, výkon
-
-Baterie: napětí, proud, SOC
-
-Síť: napětí, frekvence, výkon
-
-Zátěž: aktuální výkon
-
-Ovládání
-Zapnutí / vypnutí měniče
-
-Povolení AC nabíjení
-
-Povolení vybíjení baterie
-
-Limity SOC
-
-AC nabíjecí proud
-
-🛠️ Installation via HACS / Instalace přes HACS
-English
-Open HACS → Integrations
-
-Click Custom repositories
-
-Add repository URL:
-
-Kód
-https://github.com/vsajer/sandisolar-ha
-Category: Integration
-
-Install the integration
-
-Restart Home Assistant
-
-Add integration:
-Settings → Devices & Services → Add Integration → SANDISOLAR Modbus RTU
-
-Česky
-Otevřete HACS → Integrations
-
-Klikněte na Custom repositories
-
-Přidejte URL repozitáře:
-
-Kód
-https://github.com/vsajer/sandisolar-ha
-Kategorie: Integration
-
-Nainstalujte integraci
-
-Restartujte Home Assistant
-
-Přidejte integraci:
-Nastavení → Zařízení a služby → Přidat integraci → SANDISOLAR Modbus RTU
-
-⚙️ Configuration / Konfigurace
-English
-Required fields:
-
-Device Name
-
-Serial Port (e.g. /dev/ttyUSB0)
-
-Baud Rate (default 9600)
-
-Slave ID (default 1)
-
-Update Interval (default 30s)
-
-Optional:
-
-Czech entity names
-
-Custom polling interval
-
-Česky
-Povinné položky:
-
-Název zařízení
-
-Sériový port (např. /dev/ttyUSB0)
-
-Baudrate (výchozí 9600)
-
-Slave ID (výchozí 1)
-
-Interval aktualizace (výchozí 30s)
-
-Volitelné:
-
-Česká jména entit
-
-Vlastní interval aktualizace
-
-📊 Supported Entities / Podporované entity
-Sensors / Senzory
-PV Voltage / Current / Power
-
-Battery Voltage / Current / SOC
-
-Grid Voltage / Frequency / Power
-
-Load Power
-
-Switches / Přepínače
-Inverter ON/OFF
-
-AC Charge Enable
-
-Battery Discharge Enable
-
-Number Controls / Číselné hodnoty
-AC Charge SOC Limit
-
-Battery Discharge SOC Limit
-
-AC Charge Current
-
-🧪 Troubleshooting / Řešení problémů
-English
-Device not detected
-Check /dev/ttyUSB0 vs /dev/ttyUSB1
-
-Ensure user has access to serial ports
-
-Try reconnecting USB adapter
-
-No data
-Wrong baudrate
-
-Wrong slave ID
-
-RS485 A/B swapped
-
-Česky
-Zařízení se nezobrazuje
-Zkontrolujte /dev/ttyUSB0 vs /dev/ttyUSB1
-
-Ověřte oprávnění k sériovým portům
-
-Odpojte a znovu připojte USB převodník
-
-Žádná data
-Špatný baudrate
-
-Špatné slave ID
-
-Prohozené vodiče A/B
+Monitor your solar production, battery, grid import/export and inverter status directly in Home Assistant. Control charging, discharge limits and advanced inverter settings without relying on cloud services.
 
 ---
 
-# 📡 RS485 Wiring Diagram / Schéma zapojení RS485
+## ✨ Features
 
-## English  
-Connect the inverter to the USB–RS485 adapter as follows:
+### 📊 Real-time Monitoring
 
-- **A → A (RTX+)**  
-- **B → B (RTX–)**  
-- Use shielded twisted pair  
-- Add 120 Ω termination resistor for long cables  
+* PV1 / PV2 Voltage
+* PV1 / PV2 Current
+* Total PV Power
+* Battery Voltage
+* Battery Current
+* Battery SOC
+* Battery SOH
+* Battery Temperature
+* Grid Voltage
+* Grid Frequency
+* Grid Import / Export Power
+* EPS Power
+* EPS Active Power
+* EPS Apparent Power
+* Energy Counters
 
-🧑‍💻 Author / Autor
-Created by Vlaďa (@vsajer)  
+  * PV Energy Today / Total
+  * Battery Charge Energy Today / Total
+  * Battery Discharge Energy Today / Total
+  * Grid Import Energy Today / Total
+  * Grid Export Energy Today / Total
+  * Self Consumption Energy
+  * Energy Sold to Grid
+  * Energy Purchased from Grid
+
+### ⚙️ Control Functions
+
+* Inverter ON/OFF
+* AC Charge Enable
+* EPS Enable
+* Bypass Mode
+* UPS Mode
+
+### 🎛️ Configuration Parameters
+
+* Charge Current Limit
+* Discharge Current Limit
+* End Of Charge SOC
+* On-Grid Discharge SOC
+* Off-Grid Discharge SOC
+* AC Charge Current Limit
+* Source Priority
+* Charge Priority
+* Generator Port Mode
+* Secondary EPS Parameters
+
+### 🚨 Diagnostics
+
+* Inverter Status
+* Battery Status
+* Fault Code Decoder
+* Warning Code Decoder
+* Total Work Time
+* BMS Information
+
+---
+
+## 🖼️ Home Assistant Example
+
+Monitor:
+
+* Solar Production
+* Battery State
+* Grid Import / Export
+* Household Consumption
+* EPS Backup Output
+
+All values are updated directly through Modbus RTU.
+
+---
+
+## 📦 Installation via HACS
+
+### Add Custom Repository
+
+1. Open **HACS**
+2. Select **Integrations**
+3. Click **⋮ → Custom Repositories**
+4. Add:
+
+```text
+https://github.com/vsajer/sandisolar-ha
+```
+
+Category:
+
+```text
+Integration
+```
+
+5. Install
+6. Restart Home Assistant
+
+---
+
+## ⚙️ Configuration
+
+Navigate to:
+
+```text
+Settings → Devices & Services → Add Integration
+```
+
+Select:
+
+```text
+SANDISOLAR Modbus RTU
+```
+
+### Required Settings
+
+| Parameter       | Example      |
+| --------------- | ------------ |
+| Serial Port     | /dev/ttyUSB0 |
+| Baud Rate       | 9600         |
+| Slave ID        | 1            |
+| Update Interval | 10 s         |
+
+---
+
+## 🔌 RS485 Wiring
+
+| Inverter | USB-RS485 |
+| -------- | --------- |
+| A        | A (D+)    |
+| B        | B (D-)    |
+
+Recommendations:
+
+* Twisted pair cable
+* Shielded cable for long runs
+* 120 Ω termination resistor for long RS485 lines
+
+---
+
+## 🧩 Compatibility
+
+Tested with:
+
+* SANDISOLAR SD-PRO-EU 6.5K
+* Firmware V2.14
+* Home Assistant 2025+
+
+## 👨‍💻 Author
+
+**Vláďa (@vsajer)**
+
 Czech Republic 🇨🇿
-Modbus, Home Assistant, Hybrid Inverters
+
+---
+
+## ❤️ Support
+
+If this project helped you, please consider:
+
+* ⭐ Starring the repository
+* Reporting issues
+* Sharing improvements
+* Contributing new register definitions

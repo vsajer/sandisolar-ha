@@ -28,6 +28,7 @@ GRID_STATUS_MAP = {
     6: "Self-charging",
 }
 
+
 FAULT_WORD0_MAP = {
     0: "No fault",
     103: "Inverter DC offset is too high",
@@ -57,6 +58,7 @@ FAULT_WORD0_MAP = {
     513: "Parallel abnormality",
 }
 
+
 WARNING_MAIN_MAP = {
     0: "OK",
     103: "Grid unavailable",
@@ -71,9 +73,11 @@ WARNING_MAIN_MAP = {
     502: "Abnormal memory reading and writing",
 }
 
+
 WARNING_SUB_MAP = {
     0: "OK",
 }
+
 
 BATTERY_STATUS_MAP = {
     0: "Normal",
@@ -90,7 +94,9 @@ class BaseSandiSensor(SensorEntity):
         self._hub = hub
         self._key = key
         self._attr_name = name
-        self._attr_unique_id = f"sandisolar_sensor_{key}_{name.lower().replace(' ', '_')}"
+        self._attr_unique_id = (
+            f"sandisolar_sensor_{key}_{name.lower().replace(' ', '_')}"
+        )
 
     @property
     def device_info(self):
@@ -105,10 +111,21 @@ class BaseSandiSensor(SensorEntity):
 class SimpleSensor(BaseSandiSensor):
     def __init__(self, hub, key, name, unit, device_class, icon, decimals=1):
         super().__init__(hub, key, name)
+
         self._attr_native_unit_of_measurement = unit
         self._attr_device_class = device_class
         self._attr_icon = icon
         self._decimals = decimals
+
+        if device_class in (
+            SensorDeviceClass.POWER,
+            SensorDeviceClass.VOLTAGE,
+            SensorDeviceClass.CURRENT,
+            SensorDeviceClass.FREQUENCY,
+            SensorDeviceClass.TEMPERATURE,
+            SensorDeviceClass.BATTERY,
+        ):
+            self._attr_state_class = SensorStateClass.MEASUREMENT
 
     async def async_update(self):
         val = await self._hub.read_input_register(self._key)
@@ -129,6 +146,7 @@ class EnergySensor(BaseSandiSensor):
 
     def __init__(self, hub, key, name, icon):
         super().__init__(hub, key, name)
+
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
         self._attr_icon = icon
         self._last_value = None
@@ -137,10 +155,17 @@ class EnergySensor(BaseSandiSensor):
         val = await self._hub.read_input_register(self._key)
 
         if val is None:
+            self._attr_native_value = None
             return
 
         if self._last_value is not None and val < self._last_value:
-            val = self._last_value
+            diff = self._last_value - val
+
+            # SANDISOLAR sometimes reports a small lower value because of rounding.
+            # Keep previous value for small drops, but allow large drops such as
+            # midnight reset of daily counters.
+            if diff <= 0.5:
+                val = self._last_value
 
         self._last_value = val
         self._attr_native_value = round(val, 1)
@@ -150,6 +175,7 @@ class BatteryPowerSensor(BaseSandiSensor):
     _attr_icon = "mdi:battery-sync"
     _attr_native_unit_of_measurement = UnitOfPower.WATT
     _attr_device_class = SensorDeviceClass.POWER
+    _attr_state_class = SensorStateClass.MEASUREMENT
 
     async def async_update(self):
         discharge = await self._hub.read_input_register("battery_discharge_power")
@@ -192,6 +218,7 @@ class FaultWord0TextSensor(BaseSandiSensor):
 
         code = int(val)
         text = FAULT_WORD0_MAP.get(code, "Unknown fault code")
+
         self._attr_native_value = f"{code} - {text}"
         self._attr_extra_state_attributes = {
             "raw_value": code,
@@ -201,7 +228,6 @@ class FaultWord0TextSensor(BaseSandiSensor):
 
 class WarningMainCodeSensor(BaseSandiSensor):
     _attr_icon = "mdi:numeric"
-    _attr_native_unit_of_measurement = None
 
     async def async_update(self):
         val = await self._hub.read_input_register(self._key)
@@ -235,7 +261,6 @@ class WarningMainTextSensor(BaseSandiSensor):
 
 class WarningSubCodeSensor(BaseSandiSensor):
     _attr_icon = "mdi:numeric"
-    _attr_native_unit_of_measurement = None
 
     async def async_update(self):
         val = await self._hub.read_input_register(self._key)
@@ -356,19 +381,17 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
         EnergySensor(hub, "grid_in_energy_today", "Grid Import Energy Today", "mdi:transmission-tower-import"),
         EnergySensor(hub, "grid_in_energy_total", "Grid Import Energy Total", "mdi:transmission-tower-import"),
-        
+
         EnergySensor(hub, "grid_out_energy_today", "Grid Export Energy Today", "mdi:transmission-tower-export"),
         EnergySensor(hub, "grid_out_energy_total", "Grid Export Energy Total", "mdi:transmission-tower-export"),
-        
+
         EnergySensor(hub, "energy_sold_today", "Energy Sold Today", "mdi:cash-plus"),
         EnergySensor(hub, "energy_sold_total", "Energy Sold Total", "mdi:cash-plus"),
-
         EnergySensor(hub, "energy_bought_today", "Energy Bought Today", "mdi:cash-minus"),
         EnergySensor(hub, "energy_bought_total", "Energy Bought Total", "mdi:cash-minus"),
-
         EnergySensor(hub, "self_to_load_today", "Self To Load Today", "mdi:home-lightning-bolt"),
         EnergySensor(hub, "self_to_load_total", "Self To Load Total", "mdi:home-lightning-bolt"),
-        
+
         SimpleSensor(hub, "eps_voltage", "EPS Voltage",
                      UnitOfElectricPotential.VOLT, SensorDeviceClass.VOLTAGE, "mdi:home-lightning-bolt", 1),
         SimpleSensor(hub, "eps_current", "EPS Current",

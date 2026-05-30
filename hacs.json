@@ -1,7 +1,8 @@
 {
   "name": "SANDISOLAR SD-PRO-EU Modbus RTU",
   "content_in_root": false,
-  "domains": ["sensor", "number"],
-  "iot_class": "local_polling",
+  "country": "CZ",
+  "homeassistant": "2026.5.0",
+  "iot_class": "Local Polling",
   "render_readme": true
 }

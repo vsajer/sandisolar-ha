@@ -2,10 +2,17 @@
   "domain": "sandisolar_modbus_rtu",
   "name": "SANDISOLAR SD-PRO-EU Modbus RTU",
   "version": "1.0.0",
+  "documentation": "https://github.com/vsajer/sandisolar-ha",
+  "issue_tracker": "https://github.com/vsajer/sandisolar-ha/issues",
   "config_flow": true,
   "requirements": [],
   "dependencies": [],
-  "codeowners": [],
-  "iot_class": "local_polling"
+  "codeowners": [
+    "@vsajer"
+  ],
+  "iot_class": "local_polling",
+  "loggers": [
+    "custom_components.sandisolar_modbus_rtu"
+  ]
 }
 

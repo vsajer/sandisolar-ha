@@ -1,6 +1,6 @@
 SANDISOLAR / SD‑PRO‑EU – Modbus RTU Integration for Home Assistant
 Hybridní měnič SANDISOLAR SD‑PRO‑EU konečně v Home Assistantu — přesné hodnoty, rychlá odezva, plná kontrola.
-![SANDISOLAR + Home Assistant](docs/images/banner.png)
+
 
 [![HACS](https://img.shields.io/badge/HACS-Custom-blue.svg)]()
 [![Version](https://img.shields.io/github/v/release/vsajer/sandisolar-ha)]()
@@ -10,7 +10,7 @@ Native Home Assistant integration for the **SANDISOLAR SD-PRO-EU Hybrid Inverter
 
 Monitor your solar production, battery, grid import/export and inverter status directly in Home Assistant. Control charging, discharge limits and advanced inverter settings without relying on cloud services.
 
----
+<img width="250" height="250" alt="SandiSolar_HA" src="https://github.com/vsajer/sandisolar-ha/blob/main/custom_components/sandisolar_modbus_rtu/icons/SandiSolar_HA.png" />
 
 ## ✨ Features
 

@@ -1,4 +1,3 @@
-import asyncio
 import logging
 
 from homeassistant.components.select import SelectEntity
@@ -8,14 +7,11 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 
-VERIFY_AFTER_WRITE_DELAY = 0.5
-
-
 SOURCE_PRIORITY_OPTIONS = {
     "SOL – Solar First": 0,
     "UTI – Grid First": 1,
     "SBU – Solar → Battery → Grid": 2,
-    "OSO – On-Grid Solar Output": 10,
+    "OSO – On-Grid → EPS Output": 10,
 }
 
 CHARGE_PRIORITY_OPTIONS = {
@@ -71,6 +67,10 @@ class SandiSolarSelect(SelectEntity):
 
     _attr_has_entity_name = True
 
+    # Selecty jsou konfigurační hodnoty, ne živé senzory.
+    # Nechceme, aby si každá select entita pořád sama pollovala Modbus.
+    _attr_should_poll = False
+
     def __init__(self, hub, key, name, mapping, icon):
         self._hub = hub
         self._key = key
@@ -104,7 +104,13 @@ class SandiSolarSelect(SelectEntity):
 
         return None
 
+    async def async_added_to_hass(self):
+        """Read initial value once when entity is added to Home Assistant."""
+        await self.async_update()
+        self.async_write_ha_state()
+
     async def async_update(self):
+        """Read current select value from inverter."""
         val = await self._hub.read_holding_register(self._key)
 
         if val is None:
@@ -116,6 +122,7 @@ class SandiSolarSelect(SelectEntity):
         self._state = int(val)
 
     async def async_select_option(self, option: str):
+        """Write selected option immediately and update local HA state."""
         if option not in self._mapping:
             _LOGGER.error(
                 "SANDISOLAR: Invalid select option %s for %s",
@@ -139,12 +146,7 @@ class SandiSolarSelect(SelectEntity):
             return
 
         # Okamžitě ukaž novou volbu v Home Assistantu.
+        # Nečteme hned znovu měnič, ať zbytečně nezahltíme Modbus.
         self._state = value
         self._attr_available = True
-        self.async_write_ha_state()
-
-        # Dej měniči chvilku a potom ověř skutečnou hodnotu.
-        await asyncio.sleep(VERIFY_AFTER_WRITE_DELAY)
-
-        await self.async_update()
         self.async_write_ha_state()

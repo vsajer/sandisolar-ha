@@ -48,14 +48,14 @@ SYSTEM_FLAG_SWITCHES = [
         "icon": "mdi:engine",
     },
     {
-        "key": "dual_channel_load",
-        "name": "Dual Channel Load",
+        "key": "sec_eps_output",
+        "name": "SecEPS Output",
         "bit": 6,
-        "icon": "mdi:electric-switch",
+        "icon": "mdi:power-plug",
     },
     {
         "key": "grid_feedback",
-        "name": "Grid Feedback",
+        "name": "Grid Feedback - Advanced",
         "bit": 7,
         "icon": "mdi:transmission-tower-export",
     },
@@ -64,9 +64,79 @@ SYSTEM_FLAG_SWITCHES = [
 
 REGISTER_SWITCHES = [
     {
+        "key": "inverter_on_off",
+        "name": "Inverter Power",
+        "icon": "mdi:power",
+    },
+    {
+        "key": "eps_enable",
+        "name": "EPS Enable",
+        "icon": "mdi:power-plug-battery",
+    },
+    {
+        "key": "bypass_enable",
+        "name": "Bypass Enable",
+        "icon": "mdi:transit-connection-horizontal",
+    },
+    {
+        "key": "ups_enable",
+        "name": "UPS Mode",
+        "icon": "mdi:flash",
+    },
+    {
+        "key": "gen_charge_enable",
+        "name": "Generator Charging",
+        "icon": "mdi:engine",
+    },
+    {
+        "key": "ac_charge_enable",
+        "name": "AC Charging",
+        "icon": "mdi:battery-charging",
+    },
+    {
         "key": "beeper_on_off",
         "name": "Beeper",
         "icon": "mdi:volume-high",
+    },
+    {
+        "key": "overload_to_bypass",
+        "name": "Overload To Bypass - Advanced",
+        "icon": "mdi:alert-outline",
+    },
+    {
+        "key": "bluetooth_enable",
+        "name": "Bluetooth",
+        "icon": "mdi:bluetooth",
+    },
+    {
+        "key": "active_overload_enable",
+        "name": "Active Overload Enable - Advanced",
+        "icon": "mdi:alert-circle-outline",
+    },
+    {
+        "key": "island_enable",
+        "name": "Island Mode - Advanced",
+        "icon": "mdi:island",
+    },
+    {
+        "key": "vfrt_enable",
+        "name": "VFRT Enable - Advanced",
+        "icon": "mdi:sine-wave",
+    },
+    {
+        "key": "drms_enable",
+        "name": "DRMS Enable - Advanced",
+        "icon": "mdi:connection",
+    },
+    {
+        "key": "zero_power_output_enable",
+        "name": "Zero Power Output - Advanced",
+        "icon": "mdi:transmission-tower-off",
+    },
+    {
+        "key": "fast_mppt_enable",
+        "name": "Fast MPPT - Advanced",
+        "icon": "mdi:solar-power-variant",
     },
 ]
 

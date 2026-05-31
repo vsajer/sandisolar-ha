@@ -1,4 +1,3 @@
-import asyncio
 import logging
 
 from homeassistant.components.number import NumberEntity
@@ -12,9 +11,6 @@ from homeassistant.const import (
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
-
-
-VERIFY_AFTER_WRITE_DELAY = 0.5
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -121,6 +117,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
         # -------------------------------------------------------------
         # SecEPS thresholds
+        # 219 a 221 nechávám tak, jak máš odzkoušené v modbus_map.py.
+        # Pokud tam máš RegisterDef(..., 0.01), tady pořád zobrazujeme %
+        # v běžných jednotkách pro Home Assistant.
         # -------------------------------------------------------------
         SandiSolarNumber(
             hub,
@@ -188,6 +187,10 @@ class SandiSolarNumber(NumberEntity):
     _attr_has_entity_name = True
     _attr_mode = "slider"
 
+    # Tohle jsou konfigurační hodnoty, ne živé senzory.
+    # Nechceme, aby každá number entita pořád sama pollovala Modbus.
+    _attr_should_poll = False
+
     def __init__(
         self,
         hub,
@@ -226,6 +229,11 @@ class SandiSolarNumber(NumberEntity):
     def native_value(self):
         return self._state
 
+    async def async_added_to_hass(self):
+        """Read initial value once when entity is added to Home Assistant."""
+        await self.async_update()
+        self.async_write_ha_state()
+
     def _normalize_value(self, value):
         """Normalize value for Home Assistant display."""
         if value is None:
@@ -237,6 +245,7 @@ class SandiSolarNumber(NumberEntity):
         return int(value)
 
     async def async_update(self):
+        """Read current value from inverter."""
         val = await self._hub.read_holding_register(self._key)
 
         if val is None:
@@ -248,10 +257,10 @@ class SandiSolarNumber(NumberEntity):
         self._state = self._normalize_value(val)
 
     async def async_set_native_value(self, value: float):
-        """Write value immediately and refresh state after short delay."""
+        """Write value immediately and update local Home Assistant state."""
 
-        # Hodnota z HA může přijít jako float, i když je krok 1.
-        # Hub / modbus_map si škálování řeší sám, takže sem posíláme hodnotu v HA jednotkách.
+        # Hodnota z HA může přijít jako float i u kroku 1.
+        # Škálování řeší hub / modbus_map.py, sem posíláme hodnotu v HA jednotkách.
         write_value = round(float(value), 3)
 
         ok = await self._hub.write_holding_register(self._key, write_value)
@@ -267,12 +276,8 @@ class SandiSolarNumber(NumberEntity):
             return
 
         # Okamžitě ukaž novou hodnotu v HA.
+        # Skutečné potvrzení přijde až při dalším ručním / startovacím čtení,
+        # ale zbytečně teď nezahlcujeme Modbus.
         self._state = self._normalize_value(write_value)
         self._attr_available = True
-        self.async_write_ha_state()
-
-        # Dej měniči chvilku, pak načti skutečnou hodnotu zpět.
-        await asyncio.sleep(VERIFY_AFTER_WRITE_DELAY)
-
-        await self.async_update()
         self.async_write_ha_state()

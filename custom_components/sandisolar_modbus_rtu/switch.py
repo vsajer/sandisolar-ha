@@ -7,67 +7,98 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 
+SYSTEM_FLAGS_REGISTER = "lcd_settings_bitmask"
+
+
+SYSTEM_FLAG_SWITCHES = [
+    {
+        "key": "eco_mode",
+        "name": "Eco Mode",
+        "bit": 0,
+        "icon": "mdi:leaf",
+    },
+    {
+        "key": "overload_restart",
+        "name": "Overload Auto Restart",
+        "bit": 1,
+        "icon": "mdi:restart-alert",
+    },
+    {
+        "key": "overtemp_restart",
+        "name": "Over Temperature Auto Restart",
+        "bit": 2,
+        "icon": "mdi:thermometer-alert",
+    },
+    {
+        "key": "input_change_reminder",
+        "name": "Input Change Reminder",
+        "bit": 3,
+        "icon": "mdi:bell-alert",
+    },
+    {
+        "key": "split_phase_output",
+        "name": "Split Phase Output",
+        "bit": 4,
+        "icon": "mdi:sine-wave",
+    },
+    {
+        "key": "generator_auto_input",
+        "name": "Generator Auto Input",
+        "bit": 5,
+        "icon": "mdi:engine",
+    },
+    {
+        "key": "dual_channel_load",
+        "name": "Dual Channel Load",
+        "bit": 6,
+        "icon": "mdi:electric-switch",
+    },
+    {
+        "key": "grid_feedback",
+        "name": "Grid Feedback",
+        "bit": 7,
+        "icon": "mdi:transmission-tower-export",
+    },
+]
+
+
 async def async_setup_entry(hass, entry, async_add_entities):
     data = hass.data[DOMAIN][entry.entry_id]
     hub = data["hub"] if isinstance(data, dict) else data
 
     entities = [
-        SandiSolarSwitch(
-            hub,
-            "inverter_on_off",
-            "Inverter On/Off",
-            "mdi:power",
-        ),
-        SandiSolarSwitch(
-            hub,
-            "ac_charge_enable",
-            "AC Charge Enable",
-            "mdi:transmission-tower-import",
-        ),
-        SandiSolarSwitch(
-            hub,
-            "eps_enable",
-            "EPS Enable",
-            "mdi:home-lightning-bolt",
-        ),
-        SandiSolarSwitch(
-            hub,
-            "bypass_enable",
-            "Bypass Mode",
-            "mdi:transfer",
-        ),
-        SandiSolarSwitch(
-            hub,
-            "ups_enable",
-            "UPS Mode",
-            "mdi:car-battery",
-        ),
-        SandiSolarSwitch(
-            hub,
-            "beeper_on_off",
-            "Beeper",
-            "mdi:volume-high",
-        ),
+        SandiSolarBitmaskSwitch(
+            hub=hub,
+            register_key=SYSTEM_FLAGS_REGISTER,
+            key=item["key"],
+            name=item["name"],
+            bit=item["bit"],
+            icon=item["icon"],
+        )
+        for item in SYSTEM_FLAG_SWITCHES
     ]
 
     async_add_entities(entities)
 
 
-class SandiSolarSwitch(SwitchEntity):
-    """Switch entity for SANDISOLAR SD-PRO-EU."""
+class SandiSolarBitmaskSwitch(SwitchEntity):
+    """Switch entity for one bit inside SANDISOLAR bitmask register."""
 
     _attr_has_entity_name = True
 
-    def __init__(self, hub, key, name, icon):
+    def __init__(self, hub, register_key, key, name, bit, icon):
         self._hub = hub
+        self._register_key = register_key
         self._key = key
+        self._bit = bit
+        self._mask = 1 << bit
 
         self._attr_name = name
-        self._attr_unique_id = f"sandisolar_switch_{key}"
+        self._attr_unique_id = f"sandisolar_switch_{register_key}_{key}"
         self._attr_icon = icon
-
         self._attr_available = True
-        self._state = None
+
+        self._raw_value = None
 
     @property
     def device_info(self):
@@ -80,47 +111,65 @@ class SandiSolarSwitch(SwitchEntity):
 
     @property
     def is_on(self):
-        if self._state is None:
+        if self._raw_value is None:
             return None
 
-        return bool(self._state)
+        return bool(int(self._raw_value) & self._mask)
 
     async def async_update(self):
-        """Read holding register value."""
-        val = await self._hub.read_holding_register(self._key)
+        val = await self._hub.read_holding_register(self._register_key)
 
         if val is None:
-            _LOGGER.warning(
-                "SANDISOLAR: Switch %s is unavailable",
-                self._key,
-            )
             self._attr_available = False
-            self._state = None
+            self._raw_value = None
             return
 
         self._attr_available = True
-        self._state = bool(int(val))
+        self._raw_value = int(val)
 
     async def async_turn_on(self, **kwargs):
-        """Turn switch on."""
-        ok = await self._hub.write_holding_register(self._key, 1)
-
-        if ok:
-            self._state = True
-            self._attr_available = True
-            self.async_write_ha_state()
-        else:
-            self._attr_available = False
-            self.async_write_ha_state()
+        await self._set_bit(True)
 
     async def async_turn_off(self, **kwargs):
-        """Turn switch off."""
-        ok = await self._hub.write_holding_register(self._key, 0)
+        await self._set_bit(False)
 
-        if ok:
-            self._state = False
-            self._attr_available = True
-            self.async_write_ha_state()
-        else:
+    async def _set_bit(self, enabled: bool):
+        current_raw = await self._hub.read_holding_register(self._register_key)
+
+        if current_raw is None:
+            _LOGGER.error(
+                "SANDISOLAR: Cannot read bitmask register %s before write",
+                self._register_key,
+            )
             self._attr_available = False
             self.async_write_ha_state()
+            return
+
+        current_raw = int(current_raw)
+
+        if enabled:
+            new_value = current_raw | self._mask
+        else:
+            new_value = current_raw & ~self._mask
+
+        _LOGGER.debug(
+            "SANDISOLAR: Bitmask write %s bit=%s enabled=%s current=%s new=%s",
+            self._register_key,
+            self._bit,
+            enabled,
+            current_raw,
+            new_value,
+        )
+
+        ok = await self._hub.write_holding_register(
+            self._register_key,
+            new_value,
+        )
+
+        if ok:
+            self._raw_value = new_value
+            self._attr_available = True
+        else:
+            self._attr_available = False
+
+        self.async_write_ha_state()

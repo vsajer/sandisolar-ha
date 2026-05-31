@@ -1,6 +1,11 @@
 import logging
+from datetime import timedelta
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import (
+    SensorEntity,
+    SensorStateClass,
+    SensorDeviceClass,
+)
 from homeassistant.const import (
     UnitOfTemperature,
     UnitOfElectricPotential,
@@ -11,11 +16,17 @@ from homeassistant.const import (
     UnitOfApparentPower,
     PERCENTAGE,
 )
-from homeassistant.components.sensor import SensorStateClass, SensorDeviceClass
+from homeassistant.helpers.update_coordinator import (
+    CoordinatorEntity,
+    DataUpdateCoordinator,
+)
 
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
+
+
+SENSOR_UPDATE_INTERVAL = timedelta(seconds=10)
 
 
 GRID_STATUS_MAP = {
@@ -87,11 +98,108 @@ BATTERY_STATUS_MAP = {
 }
 
 
-class BaseSandiSensor(SensorEntity):
+SENSOR_KEYS = [
+    "pv1_voltage",
+    "pv1_current",
+    "pv2_voltage",
+    "pv2_current",
+    "pv_power_total",
+    "pv_energy_today",
+    "pv_energy_total",
+
+    "battery_voltage",
+    "battery_soc",
+    "battery_temp",
+    "battery_current",
+    "battery_discharge_power",
+    "battery_charge_power",
+    "bms_max_charge_current",
+    "bms_max_discharge_current",
+    "bms_fcc",
+    "bms_rm",
+    "bms_cycle_count",
+    "bms_soh",
+    "battery_charge_energy_today",
+    "battery_charge_energy_total",
+    "battery_discharge_energy_today",
+    "battery_discharge_energy_total",
+
+    "grid_voltage",
+    "grid_current",
+    "grid_frequency",
+    "grid_power",
+    "grid_in_energy_today",
+    "grid_in_energy_total",
+    "grid_out_energy_today",
+    "grid_out_energy_total",
+    "energy_sold_today",
+    "energy_sold_total",
+    "energy_bought_today",
+    "energy_bought_total",
+    "energy_self_to_load_today",
+    "energy_self_to_load_total",
+
+    "eps_voltage",
+    "eps_current",
+    "eps_power",
+    "eps_active_power",
+    "eps_apparent_power",
+    "eps_energy_today",
+    "eps_energy_total",
+
+    "inverter_status",
+    "battery_status",
+    "fault_word0",
+    "warning_main",
+    "warning_sub",
+    "total_work_time",
+]
+
+
+class SandiSolarSensorCoordinator(DataUpdateCoordinator):
+    """Coordinator for SANDISOLAR sensors."""
+
+    def __init__(self, hass, hub, keys):
+        super().__init__(
+            hass,
+            _LOGGER,
+            name="SANDISOLAR sensor coordinator",
+            update_interval=SENSOR_UPDATE_INTERVAL,
+        )
+        self.hub = hub
+        self.keys = keys
+
+    async def _async_update_data(self):
+        """Read all sensor values into one shared data dict."""
+
+        previous_data = self.data or {}
+        data = dict(previous_data)
+
+        for key in self.keys:
+            val = await self.hub.read_input_register(key)
+
+            if val is None:
+                # Neházej hned None, pokud máme poslední známou hodnotu.
+                # Tím se senzory nebudou zbytečně rozpadat při jednom výpadku Modbusu.
+                if key in previous_data:
+                    data[key] = previous_data[key]
+                else:
+                    data[key] = None
+                continue
+
+            data[key] = val
+
+        return data
+
+
+class BaseSandiSensor(CoordinatorEntity, SensorEntity):
+    """Base SANDISOLAR sensor."""
+
     _attr_has_entity_name = True
 
-    def __init__(self, hub, key, name: str):
-        self._hub = hub
+    def __init__(self, coordinator, key, name: str):
+        super().__init__(coordinator)
+
         self._key = key
         self._attr_name = name
         self._attr_unique_id = (
@@ -107,10 +215,30 @@ class BaseSandiSensor(SensorEntity):
             "model": "SD-PRO-EU",
         }
 
+    def _get_value(self, key=None):
+        """Get value from coordinator data."""
+        data = self.coordinator.data or {}
+        return data.get(key or self._key)
+
+    async def async_added_to_hass(self):
+        """Entity added to Home Assistant."""
+        await super().async_added_to_hass()
+        self._update_from_data()
+        self.async_write_ha_state()
+
+    def _handle_coordinator_update(self):
+        """Handle updated data from coordinator."""
+        self._update_from_data()
+        super()._handle_coordinator_update()
+
+    def _update_from_data(self):
+        """Update entity state from coordinator data."""
+        raise NotImplementedError
+
 
 class SimpleSensor(BaseSandiSensor):
-    def __init__(self, hub, key, name, unit, device_class, icon, decimals=1):
-        super().__init__(hub, key, name)
+    def __init__(self, coordinator, key, name, unit, device_class, icon, decimals=1):
+        super().__init__(coordinator, key, name)
 
         self._attr_native_unit_of_measurement = unit
         self._attr_device_class = device_class
@@ -127,8 +255,8 @@ class SimpleSensor(BaseSandiSensor):
         ):
             self._attr_state_class = SensorStateClass.MEASUREMENT
 
-    async def async_update(self):
-        val = await self._hub.read_input_register(self._key)
+    def _update_from_data(self):
+        val = self._get_value()
 
         if val is None:
             self._attr_native_value = None
@@ -144,15 +272,15 @@ class EnergySensor(BaseSandiSensor):
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_suggested_display_precision = 1
 
-    def __init__(self, hub, key, name, icon):
-        super().__init__(hub, key, name)
+    def __init__(self, coordinator, key, name, icon):
+        super().__init__(coordinator, key, name)
 
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
         self._attr_icon = icon
         self._last_value = None
 
-    async def async_update(self):
-        val = await self._hub.read_input_register(self._key)
+    def _update_from_data(self):
+        val = self._get_value()
 
         if val is None:
             self._attr_native_value = None
@@ -161,9 +289,8 @@ class EnergySensor(BaseSandiSensor):
         if self._last_value is not None and val < self._last_value:
             diff = self._last_value - val
 
-            # SANDISOLAR sometimes reports a small lower value because of rounding.
-            # Keep previous value for small drops, but allow large drops such as
-            # midnight reset of daily counters.
+            # SANDISOLAR někdy po zaokrouhlení pošle trochu menší hodnotu.
+            # Malý pokles blokujeme, velký pokles necháme kvůli denním resetům.
             if diff <= 0.5:
                 val = self._last_value
 
@@ -177,9 +304,9 @@ class BatteryPowerSensor(BaseSandiSensor):
     _attr_device_class = SensorDeviceClass.POWER
     _attr_state_class = SensorStateClass.MEASUREMENT
 
-    async def async_update(self):
-        discharge = await self._hub.read_input_register("battery_discharge_power")
-        charge = await self._hub.read_input_register("battery_charge_power")
+    def _update_from_data(self):
+        discharge = self._get_value("battery_discharge_power")
+        charge = self._get_value("battery_charge_power")
 
         if discharge is None or charge is None:
             self._attr_native_value = None
@@ -191,8 +318,8 @@ class BatteryPowerSensor(BaseSandiSensor):
 class WorkTimeSensor(BaseSandiSensor):
     _attr_icon = "mdi:clock-time-eight"
 
-    async def async_update(self):
-        val = await self._hub.read_input_register(self._key)
+    def _update_from_data(self):
+        val = self._get_value()
 
         if val is None:
             self._attr_native_value = None
@@ -209,8 +336,8 @@ class WorkTimeSensor(BaseSandiSensor):
 class FaultWord0TextSensor(BaseSandiSensor):
     _attr_icon = "mdi:alert-circle"
 
-    async def async_update(self):
-        val = await self._hub.read_input_register(self._key)
+    def _update_from_data(self):
+        val = self._get_value()
 
         if val is None:
             self._attr_native_value = None
@@ -229,8 +356,8 @@ class FaultWord0TextSensor(BaseSandiSensor):
 class WarningMainCodeSensor(BaseSandiSensor):
     _attr_icon = "mdi:numeric"
 
-    async def async_update(self):
-        val = await self._hub.read_input_register(self._key)
+    def _update_from_data(self):
+        val = self._get_value()
 
         if val is None:
             self._attr_native_value = None
@@ -242,8 +369,8 @@ class WarningMainCodeSensor(BaseSandiSensor):
 class WarningMainTextSensor(BaseSandiSensor):
     _attr_icon = "mdi:alert"
 
-    async def async_update(self):
-        val = await self._hub.read_input_register(self._key)
+    def _update_from_data(self):
+        val = self._get_value()
 
         if val is None:
             self._attr_native_value = None
@@ -262,8 +389,8 @@ class WarningMainTextSensor(BaseSandiSensor):
 class WarningSubCodeSensor(BaseSandiSensor):
     _attr_icon = "mdi:numeric"
 
-    async def async_update(self):
-        val = await self._hub.read_input_register(self._key)
+    def _update_from_data(self):
+        val = self._get_value()
 
         if val is None:
             self._attr_native_value = None
@@ -275,8 +402,8 @@ class WarningSubCodeSensor(BaseSandiSensor):
 class WarningSubTextSensor(BaseSandiSensor):
     _attr_icon = "mdi:alert"
 
-    async def async_update(self):
-        val = await self._hub.read_input_register(self._key)
+    def _update_from_data(self):
+        val = self._get_value()
 
         if val is None:
             self._attr_native_value = None
@@ -295,8 +422,8 @@ class WarningSubTextSensor(BaseSandiSensor):
 class BatteryStatusTextSensor(BaseSandiSensor):
     _attr_icon = "mdi:battery"
 
-    async def async_update(self):
-        val = await self._hub.read_input_register(self._key)
+    def _update_from_data(self):
+        val = self._get_value()
 
         if val is None:
             self._attr_native_value = None
@@ -312,8 +439,8 @@ class BatteryStatusTextSensor(BaseSandiSensor):
 class GridStatusTextSensor(BaseSandiSensor):
     _attr_icon = "mdi:transmission-tower"
 
-    async def async_update(self):
-        val = await self._hub.read_input_register(self._key)
+    def _update_from_data(self):
+        val = self._get_value()
 
         if val is None:
             self._attr_native_value = None
@@ -330,93 +457,101 @@ async def async_setup_entry(hass, entry, async_add_entities):
     data = hass.data[DOMAIN][entry.entry_id]
     hub = data["hub"] if isinstance(data, dict) else data
 
+    coordinator = SandiSolarSensorCoordinator(
+        hass=hass,
+        hub=hub,
+        keys=SENSOR_KEYS,
+    )
+
+    await coordinator.async_config_entry_first_refresh()
+
     entities = [
-        SimpleSensor(hub, "pv1_voltage", "PV1 Voltage",
+        SimpleSensor(coordinator, "pv1_voltage", "PV1 Voltage",
                      UnitOfElectricPotential.VOLT, SensorDeviceClass.VOLTAGE, "mdi:solar-power", 1),
-        SimpleSensor(hub, "pv1_current", "PV1 Current",
+        SimpleSensor(coordinator, "pv1_current", "PV1 Current",
                      UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT, "mdi:solar-power", 1),
-        SimpleSensor(hub, "pv2_voltage", "PV2 Voltage",
+        SimpleSensor(coordinator, "pv2_voltage", "PV2 Voltage",
                      UnitOfElectricPotential.VOLT, SensorDeviceClass.VOLTAGE, "mdi:solar-power", 1),
-        SimpleSensor(hub, "pv2_current", "PV2 Current",
+        SimpleSensor(coordinator, "pv2_current", "PV2 Current",
                      UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT, "mdi:solar-power", 1),
-        SimpleSensor(hub, "pv_power_total", "PV Total Power",
+        SimpleSensor(coordinator, "pv_power_total", "PV Total Power",
                      UnitOfPower.WATT, SensorDeviceClass.POWER, "mdi:solar-power", 0),
 
-        EnergySensor(hub, "pv_energy_today", "PV Energy Today", "mdi:solar-power"),
-        EnergySensor(hub, "pv_energy_total", "PV Energy Total", "mdi:solar-power"),
+        EnergySensor(coordinator, "pv_energy_today", "PV Energy Today", "mdi:solar-power"),
+        EnergySensor(coordinator, "pv_energy_total", "PV Energy Total", "mdi:solar-power"),
 
-        SimpleSensor(hub, "battery_voltage", "Battery Voltage",
+        SimpleSensor(coordinator, "battery_voltage", "Battery Voltage",
                      UnitOfElectricPotential.VOLT, SensorDeviceClass.VOLTAGE, "mdi:battery", 1),
-        SimpleSensor(hub, "battery_soc", "Battery SOC",
+        SimpleSensor(coordinator, "battery_soc", "Battery SOC",
                      PERCENTAGE, SensorDeviceClass.BATTERY, "mdi:battery-high", 0),
-        SimpleSensor(hub, "battery_temp", "Battery Temperature",
+        SimpleSensor(coordinator, "battery_temp", "Battery Temperature",
                      UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE, "mdi:thermometer", 1),
-        SimpleSensor(hub, "battery_current", "Battery Current",
+        SimpleSensor(coordinator, "battery_current", "Battery Current",
                      UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT, "mdi:current-dc", 2),
 
-        BatteryPowerSensor(hub, "battery_power", "Battery Power"),
+        BatteryPowerSensor(coordinator, "battery_power", "Battery Power"),
 
-        SimpleSensor(hub, "bms_max_charge_current", "BMS Max Charge Current",
+        SimpleSensor(coordinator, "bms_max_charge_current", "BMS Max Charge Current",
                      UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT, "mdi:battery-plus", 1),
-        SimpleSensor(hub, "bms_max_discharge_current", "BMS Max Discharge Current",
+        SimpleSensor(coordinator, "bms_max_discharge_current", "BMS Max Discharge Current",
                      UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT, "mdi:battery-minus", 1),
-        SimpleSensor(hub, "bms_fcc", "Battery FCC", "Ah", None, "mdi:battery-heart", 1),
-        SimpleSensor(hub, "bms_rm", "Battery RM", "Ah", None, "mdi:battery-clock", 1),
-        SimpleSensor(hub, "bms_cycle_count", "Battery Cycle Count", None, None, "mdi:counter", 0),
-        SimpleSensor(hub, "bms_soh", "Battery SOH", PERCENTAGE, None, "mdi:battery-check", 0),
+        SimpleSensor(coordinator, "bms_fcc", "Battery FCC", "Ah", None, "mdi:battery-heart", 1),
+        SimpleSensor(coordinator, "bms_rm", "Battery RM", "Ah", None, "mdi:battery-clock", 1),
+        SimpleSensor(coordinator, "bms_cycle_count", "Battery Cycle Count", None, None, "mdi:counter", 0),
+        SimpleSensor(coordinator, "bms_soh", "Battery SOH", PERCENTAGE, None, "mdi:battery-check", 0),
 
-        EnergySensor(hub, "battery_charge_energy_today", "Battery Charge Energy Today", "mdi:battery-charging"),
-        EnergySensor(hub, "battery_charge_energy_total", "Battery Charge Energy Total", "mdi:battery-charging"),
-        EnergySensor(hub, "battery_discharge_energy_today", "Battery Discharge Energy Today", "mdi:battery-minus"),
-        EnergySensor(hub, "battery_discharge_energy_total", "Battery Discharge Energy Total", "mdi:battery-minus"),
+        EnergySensor(coordinator, "battery_charge_energy_today", "Battery Charge Energy Today", "mdi:battery-charging"),
+        EnergySensor(coordinator, "battery_charge_energy_total", "Battery Charge Energy Total", "mdi:battery-charging"),
+        EnergySensor(coordinator, "battery_discharge_energy_today", "Battery Discharge Energy Today", "mdi:battery-minus"),
+        EnergySensor(coordinator, "battery_discharge_energy_total", "Battery Discharge Energy Total", "mdi:battery-minus"),
 
-        SimpleSensor(hub, "grid_voltage", "Grid Voltage",
+        SimpleSensor(coordinator, "grid_voltage", "Grid Voltage",
                      UnitOfElectricPotential.VOLT, SensorDeviceClass.VOLTAGE, "mdi:transmission-tower", 1),
-        SimpleSensor(hub, "grid_current", "Grid Current",
+        SimpleSensor(coordinator, "grid_current", "Grid Current",
                      UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT, "mdi:transmission-tower", 1),
-        SimpleSensor(hub, "grid_frequency", "Grid Frequency",
+        SimpleSensor(coordinator, "grid_frequency", "Grid Frequency",
                      UnitOfFrequency.HERTZ, SensorDeviceClass.FREQUENCY, "mdi:sine-wave", 2),
-        SimpleSensor(hub, "grid_power", "Grid Power",
+        SimpleSensor(coordinator, "grid_power", "Grid Power",
                      UnitOfPower.WATT, SensorDeviceClass.POWER, "mdi:transmission-tower", 0),
 
-        EnergySensor(hub, "grid_in_energy_today", "Grid Import Energy Today", "mdi:transmission-tower-import"),
-        EnergySensor(hub, "grid_in_energy_total", "Grid Import Energy Total", "mdi:transmission-tower-import"),
+        EnergySensor(coordinator, "grid_in_energy_today", "Grid Import Energy Today", "mdi:transmission-tower-import"),
+        EnergySensor(coordinator, "grid_in_energy_total", "Grid Import Energy Total", "mdi:transmission-tower-import"),
 
-        EnergySensor(hub, "grid_out_energy_today", "Grid Export Energy Today", "mdi:transmission-tower-export"),
-        EnergySensor(hub, "grid_out_energy_total", "Grid Export Energy Total", "mdi:transmission-tower-export"),
+        EnergySensor(coordinator, "grid_out_energy_today", "Grid Export Energy Today", "mdi:transmission-tower-export"),
+        EnergySensor(coordinator, "grid_out_energy_total", "Grid Export Energy Total", "mdi:transmission-tower-export"),
 
-        EnergySensor(hub, "energy_sold_today", "Energy Sold Today", "mdi:cash-plus"),
-        EnergySensor(hub, "energy_sold_total", "Energy Sold Total", "mdi:cash-plus"),
-        EnergySensor(hub, "energy_bought_today", "Energy Bought Today", "mdi:cash-minus"),
-        EnergySensor(hub, "energy_bought_total", "Energy Bought Total", "mdi:cash-minus"),
-        EnergySensor(hub, "energy_self_to_load_today", "Energy Self To Load Today", "mdi:home-lightning-bolt"),
-        EnergySensor(hub, "energy_self_to_load_total", "Energy Self To Load Total", "mdi:home-lightning-bolt"),
+        EnergySensor(coordinator, "energy_sold_today", "Energy Sold Today", "mdi:cash-plus"),
+        EnergySensor(coordinator, "energy_sold_total", "Energy Sold Total", "mdi:cash-plus"),
+        EnergySensor(coordinator, "energy_bought_today", "Energy Bought Today", "mdi:cash-minus"),
+        EnergySensor(coordinator, "energy_bought_total", "mdi:cash-minus"),
+        EnergySensor(coordinator, "energy_self_to_load_today", "Energy Self To Load Today", "mdi:home-lightning-bolt"),
+        EnergySensor(coordinator, "energy_self_to_load_total", "Energy Self To Load Total", "mdi:home-lightning-bolt"),
 
-        SimpleSensor(hub, "eps_voltage", "EPS Voltage",
+        SimpleSensor(coordinator, "eps_voltage", "EPS Voltage",
                      UnitOfElectricPotential.VOLT, SensorDeviceClass.VOLTAGE, "mdi:home-lightning-bolt", 1),
-        SimpleSensor(hub, "eps_current", "EPS Current",
+        SimpleSensor(coordinator, "eps_current", "EPS Current",
                      UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT, "mdi:home-lightning-bolt", 1),
-        SimpleSensor(hub, "eps_power", "EPS Power",
+        SimpleSensor(coordinator, "eps_power", "EPS Power",
                      UnitOfPower.WATT, SensorDeviceClass.POWER, "mdi:home-lightning-bolt", 0),
-        SimpleSensor(hub, "eps_active_power", "EPS Active Power",
+        SimpleSensor(coordinator, "eps_active_power", "EPS Active Power",
                      UnitOfPower.WATT, SensorDeviceClass.POWER, "mdi:flash", 0),
-        SimpleSensor(hub, "eps_apparent_power", "EPS Apparent Power",
+        SimpleSensor(coordinator, "eps_apparent_power", "EPS Apparent Power",
                      UnitOfApparentPower.VOLT_AMPERE, None, "mdi:flash-outline", 0),
 
-        EnergySensor(hub, "eps_energy_today", "EPS Energy Today", "mdi:home-lightning-bolt"),
-        EnergySensor(hub, "eps_energy_total", "EPS Energy Total", "mdi:home-lightning-bolt"),
+        EnergySensor(coordinator, "eps_energy_today", "EPS Energy Today", "mdi:home-lightning-bolt"),
+        EnergySensor(coordinator, "eps_energy_total", "EPS Energy Total", "mdi:home-lightning-bolt"),
 
-        GridStatusTextSensor(hub, "inverter_status", "Inverter Status"),
-        BatteryStatusTextSensor(hub, "battery_status", "Battery Status"),
+        GridStatusTextSensor(coordinator, "inverter_status", "Inverter Status"),
+        BatteryStatusTextSensor(coordinator, "battery_status", "Battery Status"),
 
-        FaultWord0TextSensor(hub, "fault_word0", "Fault Word0 Text"),
+        FaultWord0TextSensor(coordinator, "fault_word0", "Fault Word0 Text"),
 
-        WarningMainCodeSensor(hub, "warning_main", "Warning Main Code"),
-        WarningMainTextSensor(hub, "warning_main", "Warning Main Text"),
-        WarningSubCodeSensor(hub, "warning_sub", "Warning Sub Code"),
-        WarningSubTextSensor(hub, "warning_sub", "Warning Sub Text"),
+        WarningMainCodeSensor(coordinator, "warning_main", "Warning Main Code"),
+        WarningMainTextSensor(coordinator, "warning_main", "Warning Main Text"),
+        WarningSubCodeSensor(coordinator, "warning_sub", "Warning Sub Code"),
+        WarningSubTextSensor(coordinator, "warning_sub", "Warning Sub Text"),
 
-        WorkTimeSensor(hub, "total_work_time", "Total Work Time"),
+        WorkTimeSensor(coordinator, "total_work_time", "Total Work Time"),
     ]
 
     async_add_entities(entities)

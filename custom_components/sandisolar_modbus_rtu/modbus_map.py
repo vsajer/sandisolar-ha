@@ -142,9 +142,9 @@ HOLDING_REGISTERS = {
     "gen_port_work_mode": RegisterDef(216),
 
     # Reálně měnič používá hodnotu např. 4000 = 40.00 %
-    "sec_eps_on_soc": RegisterDef(219, 0.01),
+    "sec_eps_on_soc": RegisterDef(219, 1),
     "sec_eps_on_vbat": RegisterDef(220, 0.1),
-    "sec_eps_off_soc": RegisterDef(221, 0.01),
+    "sec_eps_off_soc": RegisterDef(221, 1),
     "sec_eps_off_vbat": RegisterDef(222, 0.1),
     "sec_eps_on_pv_power_min": RegisterDef(223, 10),
 

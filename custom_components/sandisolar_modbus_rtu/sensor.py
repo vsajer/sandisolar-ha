@@ -523,7 +523,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         EnergySensor(coordinator, "energy_sold_today", "Energy Sold Today", "mdi:cash-plus"),
         EnergySensor(coordinator, "energy_sold_total", "Energy Sold Total", "mdi:cash-plus"),
         EnergySensor(coordinator, "energy_bought_today", "Energy Bought Today", "mdi:cash-minus"),
-        EnergySensor(coordinator, "energy_bought_total", "mdi:cash-minus"),
+        EnergySensor(coordinator, "energy_bought_total", "Energy Bought Total", "mdi:cash-minus"),
         EnergySensor(coordinator, "energy_self_to_load_today", "Energy Self To Load Today", "mdi:home-lightning-bolt"),
         EnergySensor(coordinator, "energy_self_to_load_total", "Energy Self To Load Total", "mdi:home-lightning-bolt"),
 

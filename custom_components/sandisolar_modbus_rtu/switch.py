@@ -1,11 +1,15 @@
+import asyncio
 import logging
 
 from homeassistant.components.switch import SwitchEntity
+from homeassistant.const import EntityCategory
 
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
+
+VERIFY_AFTER_WRITE_DELAY = 0.5
 
 SYSTEM_FLAGS_REGISTER = "lcd_settings_bitmask"
 
@@ -16,48 +20,56 @@ SYSTEM_FLAG_SWITCHES = [
         "name": "Eco Mode",
         "bit": 0,
         "icon": "mdi:leaf",
+        "advanced": False,
     },
     {
         "key": "overload_restart",
         "name": "Overload Auto Restart",
         "bit": 1,
         "icon": "mdi:restart-alert",
+        "advanced": False,
     },
     {
         "key": "overtemp_restart",
         "name": "Over Temperature Auto Restart",
         "bit": 2,
         "icon": "mdi:thermometer-alert",
+        "advanced": False,
     },
     {
         "key": "input_change_alert",
         "name": "Input Change Alert",
         "bit": 3,
         "icon": "mdi:bell-alert",
+        "advanced": False,
     },
     {
         "key": "split_phase_output",
-        "name": "Split Phase Output - Advanced",
+        "name": "ADV - Split Phase Output",
         "bit": 4,
         "icon": "mdi:alert-circle-outline",
+        "advanced": True,
     },
     {
         "key": "generator_auto_input",
         "name": "Generator Auto Input",
         "bit": 5,
         "icon": "mdi:engine",
+        "advanced": False,
     },
     {
         "key": "sec_eps_output",
         "name": "SecEPS Output",
         "bit": 6,
         "icon": "mdi:power-plug",
+        "advanced": False,
     },
     {
         "key": "grid_feedback",
-        "name": "Grid Feedback - Advanced",
+        "name": "ADV - Grid Feedback",
         "bit": 7,
         "icon": "mdi:transmission-tower-export",
+        "advanced": True,
     },
 ]
 
@@ -67,76 +79,91 @@ REGISTER_SWITCHES = [
         "key": "inverter_on_off",
         "name": "Inverter Power",
         "icon": "mdi:power",
+        "advanced": False,
     },
     {
         "key": "eps_enable",
         "name": "EPS Enable",
         "icon": "mdi:power-plug-battery",
+        "advanced": False,
     },
     {
         "key": "bypass_enable",
         "name": "Bypass Enable",
         "icon": "mdi:transit-connection-horizontal",
+        "advanced": False,
     },
     {
         "key": "ups_enable",
         "name": "UPS Mode",
         "icon": "mdi:flash",
+        "advanced": False,
     },
     {
         "key": "gen_charge_enable",
         "name": "Generator Charging",
         "icon": "mdi:engine",
+        "advanced": False,
     },
     {
         "key": "ac_charge_enable",
         "name": "AC Charging",
         "icon": "mdi:battery-charging",
+        "advanced": False,
     },
     {
         "key": "beeper_on_off",
         "name": "Beeper",
         "icon": "mdi:volume-high",
+        "advanced": False,
     },
     {
         "key": "overload_to_bypass",
-        "name": "Overload To Bypass - Advanced",
+        "name": "ADV - Overload To Bypass",
         "icon": "mdi:alert-outline",
+        "advanced": True,
     },
     {
         "key": "bluetooth_enable",
         "name": "Bluetooth",
         "icon": "mdi:bluetooth",
+        "advanced": False,
     },
     {
         "key": "active_overload_enable",
-        "name": "Active Overload Enable - Advanced",
+        "name": "ADV - Active Overload Enable",
         "icon": "mdi:alert-circle-outline",
+        "advanced": True,
     },
     {
         "key": "island_enable",
-        "name": "Island Mode - Advanced",
+        "name": "ADV - Island Mode",
         "icon": "mdi:island",
+        "advanced": True,
     },
     {
         "key": "vfrt_enable",
-        "name": "VFRT Enable - Advanced",
+        "name": "ADV - VFRT Enable",
         "icon": "mdi:sine-wave",
+        "advanced": True,
     },
     {
         "key": "drms_enable",
-        "name": "DRMS Enable - Advanced",
+        "name": "ADV - DRMS Enable",
         "icon": "mdi:connection",
+        "advanced": True,
     },
     {
         "key": "zero_power_output_enable",
-        "name": "Zero Power Output - Advanced",
+        "name": "ADV - Zero Power Output",
         "icon": "mdi:transmission-tower-off",
+        "advanced": True,
     },
     {
         "key": "fast_mppt_enable",
-        "name": "Fast MPPT - Advanced",
+        "name": "ADV - Fast MPPT",
         "icon": "mdi:solar-power-variant",
+        "advanced": True,
     },
 ]
 
@@ -153,6 +180,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
             name=item["name"],
             bit=item["bit"],
             icon=item["icon"],
+            advanced=item.get("advanced", False),
         )
         for item in SYSTEM_FLAG_SWITCHES
     ]
@@ -164,6 +192,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
                 key=item["key"],
                 name=item["name"],
                 icon=item["icon"],
+                advanced=item.get("advanced", False),
             )
             for item in REGISTER_SWITCHES
         ]
@@ -177,7 +206,16 @@ class SandiSolarBitmaskSwitch(SwitchEntity):
 
     _attr_has_entity_name = True
 
-    def __init__(self, hub, register_key, key, name, bit, icon):
+    def __init__(
+        self,
+        hub,
+        register_key,
+        key,
+        name,
+        bit,
+        icon,
+        advanced=False,
+    ):
         self._hub = hub
         self._register_key = register_key
         self._key = key
@@ -188,6 +226,10 @@ class SandiSolarBitmaskSwitch(SwitchEntity):
         self._attr_unique_id = f"sandisolar_switch_{register_key}_{key}"
         self._attr_icon = icon
         self._attr_available = True
+
+        if advanced:
+            self._attr_entity_category = EntityCategory.CONFIG
+            self._attr_entity_registry_enabled_default = False
 
         self._raw_value = None
 
@@ -257,12 +299,26 @@ class SandiSolarBitmaskSwitch(SwitchEntity):
             new_value,
         )
 
-        if ok:
-            self._raw_value = new_value
-            self._attr_available = True
-        else:
+        if not ok:
+            _LOGGER.error(
+                "SANDISOLAR: Failed to write bitmask register %s bit=%s enabled=%s",
+                self._register_key,
+                self._bit,
+                enabled,
+            )
             self._attr_available = False
+            self.async_write_ha_state()
+            return
 
+        # Okamžitě ukaž nový stav v Home Assistantu.
+        self._raw_value = new_value
+        self._attr_available = True
+        self.async_write_ha_state()
+
+        # Po krátké pauze ověř skutečnou hodnotu z měniče.
+        await asyncio.sleep(VERIFY_AFTER_WRITE_DELAY)
+
+        await self.async_update()
         self.async_write_ha_state()
 
 
@@ -271,7 +327,7 @@ class SandiSolarRegisterSwitch(SwitchEntity):
 
     _attr_has_entity_name = True
 
-    def __init__(self, hub, key, name, icon):
+    def __init__(self, hub, key, name, icon, advanced=False):
         self._hub = hub
         self._key = key
 
@@ -279,6 +335,10 @@ class SandiSolarRegisterSwitch(SwitchEntity):
         self._attr_unique_id = f"sandisolar_switch_{key}"
         self._attr_icon = icon
         self._attr_available = True
+
+        if advanced:
+            self._attr_entity_category = EntityCategory.CONFIG
+            self._attr_entity_registry_enabled_default = False
 
         self._state = None
 
@@ -318,10 +378,23 @@ class SandiSolarRegisterSwitch(SwitchEntity):
     async def _write_state(self, value: int):
         ok = await self._hub.write_holding_register(self._key, value)
 
-        if ok:
-            self._state = value
-            self._attr_available = True
-        else:
+        if not ok:
+            _LOGGER.error(
+                "SANDISOLAR: Failed to write switch %s=%s",
+                self._key,
+                value,
+            )
             self._attr_available = False
+            self.async_write_ha_state()
+            return
 
+        # Okamžitě ukaž nový stav v Home Assistantu.
+        self._state = value
+        self._attr_available = True
+        self.async_write_ha_state()
+
+        # Po krátké pauze ověř skutečnou hodnotu z měniče.
+        await asyncio.sleep(VERIFY_AFTER_WRITE_DELAY)
+
+        await self.async_update()
         self.async_write_ha_state()

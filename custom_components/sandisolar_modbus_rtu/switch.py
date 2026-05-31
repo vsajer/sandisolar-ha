@@ -1,4 +1,3 @@
-import asyncio
 import logging
 
 from homeassistant.components.switch import SwitchEntity
@@ -8,8 +7,6 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-
-VERIFY_AFTER_WRITE_DELAY = 0.5
 
 SYSTEM_FLAGS_REGISTER = "lcd_settings_bitmask"
 
@@ -205,6 +202,7 @@ class SandiSolarBitmaskSwitch(SwitchEntity):
     """Switch entity for one bit inside SANDISOLAR bitmask register."""
 
     _attr_has_entity_name = True
+    _attr_should_poll = False
 
     def __init__(
         self,
@@ -249,7 +247,13 @@ class SandiSolarBitmaskSwitch(SwitchEntity):
 
         return bool(int(self._raw_value) & self._mask)
 
+    async def async_added_to_hass(self):
+        """Read initial value once when entity is added."""
+        await self.async_update()
+        self.async_write_ha_state()
+
     async def async_update(self):
+        """Read current bitmask value from inverter."""
         val = await self._hub.read_holding_register(self._register_key)
 
         if val is None:
@@ -311,14 +315,9 @@ class SandiSolarBitmaskSwitch(SwitchEntity):
             return
 
         # Okamžitě ukaž nový stav v Home Assistantu.
+        # Nečteme hned znovu měnič, ať zbytečně necpeme další dotaz do Modbus fronty.
         self._raw_value = new_value
         self._attr_available = True
-        self.async_write_ha_state()
-
-        # Po krátké pauze ověř skutečnou hodnotu z měniče.
-        await asyncio.sleep(VERIFY_AFTER_WRITE_DELAY)
-
-        await self.async_update()
         self.async_write_ha_state()
 
 
@@ -326,6 +325,7 @@ class SandiSolarRegisterSwitch(SwitchEntity):
     """Simple 0/1 holding register switch for SANDISOLAR."""
 
     _attr_has_entity_name = True
+    _attr_should_poll = False
 
     def __init__(self, hub, key, name, icon, advanced=False):
         self._hub = hub
@@ -358,7 +358,13 @@ class SandiSolarRegisterSwitch(SwitchEntity):
 
         return int(self._state) == 1
 
+    async def async_added_to_hass(self):
+        """Read initial value once when entity is added."""
+        await self.async_update()
+        self.async_write_ha_state()
+
     async def async_update(self):
+        """Read current switch value from inverter."""
         val = await self._hub.read_holding_register(self._key)
 
         if val is None:
@@ -389,12 +395,8 @@ class SandiSolarRegisterSwitch(SwitchEntity):
             return
 
         # Okamžitě ukaž nový stav v Home Assistantu.
+        # Skutečný stav se znovu načte až při startu / reloadu integrace,
+        # ne hned po zápisu, aby se nezahltil Modbus.
         self._state = value
         self._attr_available = True
-        self.async_write_ha_state()
-
-        # Po krátké pauze ověř skutečnou hodnotu z měniče.
-        await asyncio.sleep(VERIFY_AFTER_WRITE_DELAY)
-
-        await self.async_update()
         self.async_write_ha_state()

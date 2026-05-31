@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from homeassistant.components.number import NumberEntity
@@ -11,6 +12,9 @@ from homeassistant.const import (
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
+
+
+VERIFY_AFTER_WRITE_DELAY = 0.5
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -222,6 +226,16 @@ class SandiSolarNumber(NumberEntity):
     def native_value(self):
         return self._state
 
+    def _normalize_value(self, value):
+        """Normalize value for Home Assistant display."""
+        if value is None:
+            return None
+
+        if isinstance(value, float):
+            return round(value, 3)
+
+        return int(value)
+
     async def async_update(self):
         val = await self._hub.read_holding_register(self._key)
 
@@ -231,19 +245,34 @@ class SandiSolarNumber(NumberEntity):
             return
 
         self._attr_available = True
-
-        if isinstance(val, float):
-            self._state = round(val, 3)
-        else:
-            self._state = int(val)
+        self._state = self._normalize_value(val)
 
     async def async_set_native_value(self, value: float):
-        ok = await self._hub.write_holding_register(self._key, value)
+        """Write value immediately and refresh state after short delay."""
 
-        if ok:
-            self._state = value
-            self._attr_available = True
-        else:
+        # Hodnota z HA může přijít jako float, i když je krok 1.
+        # Hub / modbus_map si škálování řeší sám, takže sem posíláme hodnotu v HA jednotkách.
+        write_value = round(float(value), 3)
+
+        ok = await self._hub.write_holding_register(self._key, write_value)
+
+        if not ok:
+            _LOGGER.error(
+                "SANDISOLAR: Failed to write number %s=%s",
+                self._key,
+                write_value,
+            )
             self._attr_available = False
+            self.async_write_ha_state()
+            return
 
+        # Okamžitě ukaž novou hodnotu v HA.
+        self._state = self._normalize_value(write_value)
+        self._attr_available = True
+        self.async_write_ha_state()
+
+        # Dej měniči chvilku, pak načti skutečnou hodnotu zpět.
+        await asyncio.sleep(VERIFY_AFTER_WRITE_DELAY)
+
+        await self.async_update()
         self.async_write_ha_state()

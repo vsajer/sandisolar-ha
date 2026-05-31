@@ -76,18 +76,35 @@ INPUT_REGISTERS = {
 
     "total_work_time": RegisterDef(107, scale=1, count=2),
 }
-
-
 HOLDING_REGISTERS = {
+    # ---------------------------------------------------------------------
+    # System
+    # ---------------------------------------------------------------------
     "inverter_on_off": RegisterDef(0),
 
     "device_id": RegisterDef(3),
     "ac_input_type": RegisterDef(209),
 
+    # ---------------------------------------------------------------------
+    # Advanced / system enables
+    # ---------------------------------------------------------------------
+    "active_overload_enable": RegisterDef(71),
+    "island_enable": RegisterDef(80),
+    "vfrt_enable": RegisterDef(81),
+    "drms_enable": RegisterDef(82),
+    "zero_power_output_enable": RegisterDef(85),
+    "fast_mppt_enable": RegisterDef(86),
+
+    # ---------------------------------------------------------------------
+    # EPS / bypass / UPS
+    # ---------------------------------------------------------------------
     "eps_enable": RegisterDef(108),
     "bypass_enable": RegisterDef(109),
     "ups_enable": RegisterDef(110),
 
+    # ---------------------------------------------------------------------
+    # Battery limits
+    # ---------------------------------------------------------------------
     "charge_limit": RegisterDef(137),
     "discharge_limit": RegisterDef(138),
     "end_of_charge_soc": RegisterDef(139),
@@ -95,8 +112,15 @@ HOLDING_REGISTERS = {
     "on_grid_discharge_soc": RegisterDef(140),
     "off_grid_discharge_soc": RegisterDef(141),
 
+    # ---------------------------------------------------------------------
+    # Charging
+    # ---------------------------------------------------------------------
+    "gen_charge_enable": RegisterDef(144),
     "ac_charge_enable": RegisterDef(145),
 
+    # ---------------------------------------------------------------------
+    # Priority selects
+    # ---------------------------------------------------------------------
     "charge_priority": RegisterDef(181),
     "source_priority": RegisterDef(182),
 
@@ -105,13 +129,27 @@ HOLDING_REGISTERS = {
 
     "ac_charge_current_limit": RegisterDef(189, 0.1),
 
+    # ---------------------------------------------------------------------
+    # System flags / beeper / bypass
+    # ---------------------------------------------------------------------
     "lcd_settings_bitmask": RegisterDef(201),
     "beeper_on_off": RegisterDef(207),
+    "overload_to_bypass": RegisterDef(208),
 
+    # ---------------------------------------------------------------------
+    # GEN port / SecEPS
+    # ---------------------------------------------------------------------
     "gen_port_work_mode": RegisterDef(216),
+
+    # Reálně měnič používá hodnotu např. 4000 = 40.00 %
     "sec_eps_on_soc": RegisterDef(219, 0.01),
     "sec_eps_on_vbat": RegisterDef(220, 0.1),
     "sec_eps_off_soc": RegisterDef(221, 0.01),
     "sec_eps_off_vbat": RegisterDef(222, 0.1),
     "sec_eps_on_pv_power_min": RegisterDef(223, 10),
+
+    # ---------------------------------------------------------------------
+    # Datalogger / Bluetooth
+    # ---------------------------------------------------------------------
+    "bluetooth_enable": RegisterDef(231),
 }

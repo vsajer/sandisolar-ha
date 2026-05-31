@@ -30,16 +30,16 @@ SYSTEM_FLAG_SWITCHES = [
         "icon": "mdi:thermometer-alert",
     },
     {
-        "key": "input_change_reminder",
-        "name": "Input Change Reminder",
+        "key": "input_change_alert",
+        "name": "Input Change Alert",
         "bit": 3,
         "icon": "mdi:bell-alert",
     },
     {
         "key": "split_phase_output",
-        "name": "Split Phase Output",
+        "name": "Split Phase Output - Advanced",
         "bit": 4,
-        "icon": "mdi:sine-wave",
+        "icon": "mdi:alert-circle-outline",
     },
     {
         "key": "generator_auto_input",
@@ -62,6 +62,15 @@ SYSTEM_FLAG_SWITCHES = [
 ]
 
 
+REGISTER_SWITCHES = [
+    {
+        "key": "beeper_on_off",
+        "name": "Beeper",
+        "icon": "mdi:volume-high",
+    },
+]
+
+
 async def async_setup_entry(hass, entry, async_add_entities):
     data = hass.data[DOMAIN][entry.entry_id]
     hub = data["hub"] if isinstance(data, dict) else data
@@ -77,6 +86,18 @@ async def async_setup_entry(hass, entry, async_add_entities):
         )
         for item in SYSTEM_FLAG_SWITCHES
     ]
+
+    entities.extend(
+        [
+            SandiSolarRegisterSwitch(
+                hub=hub,
+                key=item["key"],
+                name=item["name"],
+                icon=item["icon"],
+            )
+            for item in REGISTER_SWITCHES
+        ]
+    )
 
     async_add_entities(entities)
 
@@ -168,6 +189,67 @@ class SandiSolarBitmaskSwitch(SwitchEntity):
 
         if ok:
             self._raw_value = new_value
+            self._attr_available = True
+        else:
+            self._attr_available = False
+
+        self.async_write_ha_state()
+
+
+class SandiSolarRegisterSwitch(SwitchEntity):
+    """Simple 0/1 holding register switch for SANDISOLAR."""
+
+    _attr_has_entity_name = True
+
+    def __init__(self, hub, key, name, icon):
+        self._hub = hub
+        self._key = key
+
+        self._attr_name = name
+        self._attr_unique_id = f"sandisolar_switch_{key}"
+        self._attr_icon = icon
+        self._attr_available = True
+
+        self._state = None
+
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {("sandisolar_modbus_rtu", "sdproeu_main")},
+            "name": "SANDISOLAR SD-PRO-EU",
+            "manufacturer": "SANDISOLAR",
+            "model": "SD-PRO-EU",
+        }
+
+    @property
+    def is_on(self):
+        if self._state is None:
+            return None
+
+        return int(self._state) == 1
+
+    async def async_update(self):
+        val = await self._hub.read_holding_register(self._key)
+
+        if val is None:
+            self._attr_available = False
+            self._state = None
+            return
+
+        self._attr_available = True
+        self._state = int(val)
+
+    async def async_turn_on(self, **kwargs):
+        await self._write_state(1)
+
+    async def async_turn_off(self, **kwargs):
+        await self._write_state(0)
+
+    async def _write_state(self, value: int):
+        ok = await self._hub.write_holding_register(self._key, value)
+
+        if ok:
+            self._state = value
             self._attr_available = True
         else:
             self._attr_available = False

@@ -30,15 +30,6 @@ GEN_PORT_WORK_MODE_OPTIONS = {
     "6 – AC Couple on SecEPS Side": 6,
 }
 
-LCD_OPTIONS = {
-    "All Off": 0,
-    "LCD Always On": 2,
-    "LCD Sleep Mode": 4,
-    "Touch Wake-Up Only": 8,
-    "Default Auto-Off + Touch Wake-Up": 9,
-    "All On": 15,
-}
-
 
 async def async_setup_entry(hass, entry, async_add_entities):
     data = hass.data[DOMAIN][entry.entry_id]
@@ -65,13 +56,6 @@ async def async_setup_entry(hass, entry, async_add_entities):
             "GEN Port Work Mode",
             GEN_PORT_WORK_MODE_OPTIONS,
             "mdi:dip-switch",
-        ),
-        SandiSolarSelect(
-            hub,
-            "lcd_settings_bitmask",
-            "LCD Settings",
-            LCD_OPTIONS,
-            "mdi:monitor",
         ),
     ]
 
@@ -105,30 +89,13 @@ class SandiSolarSelect(SelectEntity):
             "model": "SD-PRO-EU",
         }
 
-    def _get_display_value(self, value: int) -> int:
-        """Return value used for matching current select option.
-
-        Register 201 - lcd_settings_bitmask - is a bitmask.
-        LCD options use only lower 4 bits.
-        Higher bits may contain other enabled functions, for example
-        generator, dual load / SecEPS-related flags, grid feedback, etc.
-
-        Without this mask Home Assistant can show the select as unknown.
-        """
-        if self._key == "lcd_settings_bitmask":
-            return value & 0x0F
-
-        return value
-
     @property
     def current_option(self):
         if self._state is None:
             return None
 
-        display_value = self._get_display_value(int(self._state))
-
         for label, value in self._mapping.items():
-            if value == display_value:
+            if value == self._state:
                 return label
 
         return None
@@ -153,34 +120,7 @@ class SandiSolarSelect(SelectEntity):
             )
             return
 
-        selected_value = int(self._mapping[option])
-
-        if self._key == "lcd_settings_bitmask":
-            current_raw = await self._hub.read_holding_register(self._key)
-
-            if current_raw is None:
-                _LOGGER.error(
-                    "SANDISOLAR: Cannot read current LCD bitmask before write"
-                )
-                self._attr_available = False
-                self.async_write_ha_state()
-                return
-
-            current_raw = int(current_raw)
-
-            # Register 201 is a bitmask.
-            # Change only lower 4 bits used by LCD settings.
-            # Preserve bits 4-15 so SecEPS / SmartLoad / other flags stay untouched.
-            value = (current_raw & ~0x0F) | selected_value
-
-            _LOGGER.debug(
-                "SANDISOLAR: LCD bitmask write: current=%s selected=%s new=%s",
-                current_raw,
-                selected_value,
-                value,
-            )
-        else:
-            value = selected_value
+        value = int(self._mapping[option])
 
         ok = await self._hub.write_holding_register(self._key, value)
 

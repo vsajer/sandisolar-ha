@@ -163,28 +163,28 @@ async def async_setup_entry(hass, entry, async_add_entities):
         # Tyhle jsou schované jako Advanced / Config.
         # Pro lithium/BMS režim jsou spíš pokročilé nastavení.
         # -------------------------------------------------------------
-        SandiSolarNumber(
-            hub,
-            "sec_eps_on_vbat",
-            "ADV - SecEPS ON Voltage",
-            UnitOfElectricPotential.VOLT,
-            40,
-            70,
-            0.1,
-            "mdi:alert-circle-outline",
-            advanced=True,
-        ),
-        SandiSolarNumber(
-            hub,
-            "sec_eps_off_vbat",
-            "ADV - SecEPS OFF Voltage",
-            UnitOfElectricPotential.VOLT,
-            40,
-            70,
-            0.1,
-            "mdi:alert-circle-outline",
-            advanced=True,
-        ),
+        #SandiSolarNumber(
+        #    hub,
+        #    "sec_eps_on_vbat",
+        #    "ADV - SecEPS ON Voltage",
+        #    UnitOfElectricPotential.VOLT,
+        #    40,
+        #    70,
+        #    0.1,
+        #    "mdi:alert-circle-outline",
+        #    advanced=True,
+        #),
+        #SandiSolarNumber(
+        #    hub,
+        #    "sec_eps_off_vbat",
+        #    "ADV - SecEPS OFF Voltage",
+        #    UnitOfElectricPotential.VOLT,
+        #    40,
+        #    70,
+        #    0.1,
+        #    "mdi:alert-circle-outline",
+        #    advanced=True,
+        #),
 
         # -------------------------------------------------------------
         # SecEPS ON PV Power Min

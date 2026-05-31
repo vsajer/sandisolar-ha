@@ -14,6 +14,16 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 
+def _is_sane_soc(value) -> bool:
+    """Return True only for realistic SOC values."""
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return False
+
+    return 0 <= value <= 100
+
+
 async def async_setup_entry(hass, entry, async_add_entities):
     data = hass.data[DOMAIN][entry.entry_id]
     hub = data["hub"] if isinstance(data, dict) else data
@@ -118,13 +128,20 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
         # -------------------------------------------------------------
         # SecEPS thresholds - SOC
+        #
+        # Důležité:
+        # v modbus_map.py musí být:
+        # "sec_eps_on_soc": RegisterDef(219)
+        # "sec_eps_off_soc": RegisterDef(221)
+        #
+        # Ne RegisterDef(..., 0.01), jinak se z 73 % stane 7300 nebo 0.73.
         # -------------------------------------------------------------
         SandiSolarNumber(
             hub,
             "sec_eps_on_soc",
             "SecEPS ON SOC",
             PERCENTAGE,
-            0,
+            40,
             100,
             1,
             "mdi:toggle-switch",
@@ -134,7 +151,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
             "sec_eps_off_soc",
             "SecEPS OFF SOC",
             PERCENTAGE,
-            0,
+            40,
             100,
             1,
             "mdi:toggle-switch-off",
@@ -142,6 +159,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
         # -------------------------------------------------------------
         # SecEPS thresholds - Voltage
+        #
         # Tyhle jsou schované jako Advanced / Config.
         # Pro lithium/BMS režim jsou spíš pokročilé nastavení.
         # -------------------------------------------------------------
@@ -171,6 +189,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
         # -------------------------------------------------------------
         # SecEPS ON PV Power Min
         # scale řeší modbus_map.py: RegisterDef(223, 10)
+        #
+        # Měnič odmítal 10000 W, proto UI omezujeme na 0–3000 W.
+        # Výchozí hodnota v dokumentaci bývá okolo 3000 W.
         # -------------------------------------------------------------
         SandiSolarNumber(
             hub,
@@ -178,7 +199,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
             "SecEPS ON PV Power Min",
             UnitOfPower.WATT,
             0,
-            10000,
+            3000,
             10,
             "mdi:solar-power",
         ),
@@ -267,12 +288,49 @@ class SandiSolarNumber(NumberEntity):
         self._attr_available = True
         self._state = self._normalize_value(val)
 
+    def _validate_before_write(self, write_value: float) -> bool:
+        """Validate value before writing to inverter."""
+
+        # SecEPS OFF SOC must be lower than SecEPS ON SOC.
+        if self._key == "sec_eps_off_soc":
+            on_soc = self._hub.get_cached("sec_eps_on_soc")
+
+            # Ignore broken cached values like 7300 from previous wrong scaling.
+            if _is_sane_soc(on_soc) and write_value >= float(on_soc):
+                _LOGGER.error(
+                    "SANDISOLAR: Refusing sec_eps_off_soc=%s because it must "
+                    "be lower than sec_eps_on_soc=%s",
+                    write_value,
+                    on_soc,
+                )
+                return False
+
+        # SecEPS ON SOC must be higher than SecEPS OFF SOC.
+        if self._key == "sec_eps_on_soc":
+            off_soc = self._hub.get_cached("sec_eps_off_soc")
+
+            # Ignore broken cached values like 7300 from previous wrong scaling.
+            if _is_sane_soc(off_soc) and write_value <= float(off_soc):
+                _LOGGER.error(
+                    "SANDISOLAR: Refusing sec_eps_on_soc=%s because it must "
+                    "be higher than sec_eps_off_soc=%s",
+                    write_value,
+                    off_soc,
+                )
+                return False
+
+        return True
+
     async def async_set_native_value(self, value: float):
         """Write value immediately and update local Home Assistant state."""
 
         # Hodnota z HA může přijít jako float i u kroku 1.
         # Škálování řeší hub / modbus_map.py, sem posíláme hodnotu v HA jednotkách.
         write_value = round(float(value), 3)
+
+        if not self._validate_before_write(write_value):
+            self.async_write_ha_state()
+            return
 
         ok = await self._hub.write_holding_register(self._key, write_value)
 

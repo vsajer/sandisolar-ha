@@ -6,6 +6,7 @@ from homeassistant.const import (
     PERCENTAGE,
     UnitOfElectricPotential,
     UnitOfPower,
+    EntityCategory,
 )
 
 from .const import DOMAIN
@@ -116,10 +117,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         ),
 
         # -------------------------------------------------------------
-        # SecEPS thresholds
-        # 219 a 221 nechávám tak, jak máš odzkoušené v modbus_map.py.
-        # Pokud tam máš RegisterDef(..., 0.01), tady pořád zobrazujeme %
-        # v běžných jednotkách pro Home Assistant.
+        # SecEPS thresholds - SOC
         # -------------------------------------------------------------
         SandiSolarNumber(
             hub,
@@ -141,25 +139,33 @@ async def async_setup_entry(hass, entry, async_add_entities):
             1,
             "mdi:toggle-switch-off",
         ),
+
+        # -------------------------------------------------------------
+        # SecEPS thresholds - Voltage
+        # Tyhle jsou schované jako Advanced / Config.
+        # Pro lithium/BMS režim jsou spíš pokročilé nastavení.
+        # -------------------------------------------------------------
         SandiSolarNumber(
             hub,
             "sec_eps_on_vbat",
-            "SecEPS ON Voltage",
+            "ADV - SecEPS ON Voltage",
             UnitOfElectricPotential.VOLT,
             40,
             60,
             0.1,
-            "mdi:home-lightning-bolt",
+            "mdi:alert-circle-outline",
+            advanced=True,
         ),
         SandiSolarNumber(
             hub,
             "sec_eps_off_vbat",
-            "SecEPS OFF Voltage",
+            "ADV - SecEPS OFF Voltage",
             UnitOfElectricPotential.VOLT,
             40,
             60,
             0.1,
-            "mdi:home-lightning-bolt",
+            "mdi:alert-circle-outline",
+            advanced=True,
         ),
 
         # -------------------------------------------------------------
@@ -201,6 +207,7 @@ class SandiSolarNumber(NumberEntity):
         max_value,
         step,
         icon,
+        advanced=False,
     ):
         self._hub = hub
         self._key = key
@@ -213,6 +220,10 @@ class SandiSolarNumber(NumberEntity):
         self._attr_native_step = step
         self._attr_icon = icon
         self._attr_available = True
+
+        if advanced:
+            self._attr_entity_category = EntityCategory.CONFIG
+            self._attr_entity_registry_enabled_default = False
 
         self._state = None
 

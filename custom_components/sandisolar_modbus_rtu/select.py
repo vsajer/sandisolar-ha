@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from homeassistant.components.select import SelectEntity
@@ -5,6 +6,9 @@ from homeassistant.components.select import SelectEntity
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
+
+
+VERIFY_AFTER_WRITE_DELAY = 0.5
 
 
 SOURCE_PRIORITY_OPTIONS = {
@@ -95,7 +99,7 @@ class SandiSolarSelect(SelectEntity):
             return None
 
         for label, value in self._mapping.items():
-            if value == self._state:
+            if int(value) == int(self._state):
                 return label
 
         return None
@@ -124,10 +128,23 @@ class SandiSolarSelect(SelectEntity):
 
         ok = await self._hub.write_holding_register(self._key, value)
 
-        if ok:
-            self._state = value
-            self._attr_available = True
-        else:
+        if not ok:
+            _LOGGER.error(
+                "SANDISOLAR: Failed to write select %s=%s",
+                self._key,
+                value,
+            )
             self._attr_available = False
+            self.async_write_ha_state()
+            return
 
+        # Okamžitě ukaž novou volbu v Home Assistantu.
+        self._state = value
+        self._attr_available = True
+        self.async_write_ha_state()
+
+        # Dej měniči chvilku a potom ověř skutečnou hodnotu.
+        await asyncio.sleep(VERIFY_AFTER_WRITE_DELAY)
+
+        await self.async_update()
         self.async_write_ha_state()

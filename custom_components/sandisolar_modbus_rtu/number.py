@@ -120,7 +120,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
             "ac_charge_current_limit",
             "AC Charge Current Limit",
             UnitOfElectricCurrent.AMPERE,
-            0,
+            10,
             100,
             0.1,
             "mdi:current-ac",
@@ -149,11 +149,11 @@ async def async_setup_entry(hass, entry, async_add_entities):
         SandiSolarNumber(
             hub,
             "sec_eps_off_soc",
-            "SecEPS OFF SOC",
+            "SecEPS SWITCH SOC",
             PERCENTAGE,
             0,
             100,
-            1,
+            0.1,
             "mdi:toggle-switch-off",
         ),
 

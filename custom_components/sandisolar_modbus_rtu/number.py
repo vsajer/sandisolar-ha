@@ -153,7 +153,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
             PERCENTAGE,
             10,
             100,
-            0.1,
+            1,
             "mdi:toggle-switch-off",
         ),
 

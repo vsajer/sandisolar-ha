@@ -192,14 +192,18 @@ def _clamp(value, min_value, max_value):
     return max(min_value, min(max_value, value))
 
 
-def _load_language_file(language: str) -> dict:
-    """Load integration translation JSON file."""
+def _normalize_language(language: str) -> str:
+    """Normalize Home Assistant language code."""
+    return (language or "en").split("-")[0].lower()
 
-    language = (language or "en").split("-")[0].lower()
 
-    if language in _TRANSLATION_CACHE:
-        return _TRANSLATION_CACHE[language]
+def _load_language_file_sync(language: str) -> dict:
+    """Load integration translation JSON file synchronously.
 
+    This function must only be called through hass.async_add_executor_job().
+    """
+
+    language = _normalize_language(language)
     path = TRANSLATIONS_DIR / f"{language}.json"
 
     if not path.exists():
@@ -207,23 +211,63 @@ def _load_language_file(language: str) -> dict:
 
     try:
         with path.open("r", encoding="utf-8") as file:
-            data = json.load(file)
+            return json.load(file)
     except Exception as err:
         _LOGGER.warning(
             "SANDISOLAR: Failed to load translation file %s: %s",
             path,
             err,
         )
-        data = {}
+        return {}
 
-    _TRANSLATION_CACHE[language] = data
-    return data
+
+async def _async_preload_translations(hass) -> None:
+    """Preload translation files outside the event loop."""
+
+    languages = {
+        "en",
+        "cs",
+        "de",
+        "pl",
+        "sk",
+        _normalize_language(hass.config.language),
+    }
+
+    for language in languages:
+        if not language:
+            continue
+
+        if language in _TRANSLATION_CACHE:
+            continue
+
+        data = await hass.async_add_executor_job(
+            _load_language_file_sync,
+            language,
+        )
+        _TRANSLATION_CACHE[language] = data
+
+    if "en" not in _TRANSLATION_CACHE:
+        _TRANSLATION_CACHE["en"] = await hass.async_add_executor_job(
+            _load_language_file_sync,
+            "en",
+        )
+
+
+def _get_language_data(language: str) -> dict:
+    """Get already loaded translation data from cache only."""
+
+    language = _normalize_language(language)
+
+    if language in _TRANSLATION_CACHE:
+        return _TRANSLATION_CACHE[language]
+
+    return _TRANSLATION_CACHE.get("en", {})
 
 
 def _translated_state(language: str, section: str, code, fallback: str) -> str:
     """Translate state/warning/fault text by code."""
 
-    data = _load_language_file(language)
+    data = _get_language_data(language)
 
     try:
         return data["states"][section][str(int(code))]
@@ -234,7 +278,7 @@ def _translated_state(language: str, section: str, code, fallback: str) -> str:
 def _translated_unknown(language: str, key: str, fallback: str) -> str:
     """Translate unknown fallback text."""
 
-    data = _load_language_file(language)
+    data = _get_language_data(language)
 
     try:
         return data["states"]["unknown"][key]
@@ -451,6 +495,9 @@ class TimedAveragePowerSensor(BaseSandiSensor):
     def _source_value(self):
         if self._source == "pv":
             return self._get_value("pv_power_total")
+
+        if self._source == "grid":
+            return self._get_value("grid_power")
 
         if self._source == "eps":
             return self._get_value("eps_power")
@@ -1187,6 +1234,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
     data = hass.data[DOMAIN][entry.entry_id]
     hub = data["hub"] if isinstance(data, dict) else data
 
+    await _async_preload_translations(hass)
+
     coordinator = SandiSolarSensorCoordinator(
         hass=hass,
         hub=hub,
@@ -1259,6 +1308,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
                      UnitOfFrequency.HERTZ, SensorDeviceClass.FREQUENCY, "mdi:sine-wave", 2),
         SimpleSensor(coordinator, "grid_power", "Grid Power",
                      UnitOfPower.WATT, SensorDeviceClass.POWER, "mdi:transmission-tower", 0),
+        TimedAveragePowerSensor(coordinator, "avg_grid_power", "AVG Grid Power", "grid", "mdi:transmission-tower"),
 
         EnergySensor(coordinator, "grid_in_energy_today", "Grid Import Energy Today", "mdi:transmission-tower-import"),
         EnergySensor(coordinator, "grid_in_energy_total", "Grid Import Energy Total", "mdi:transmission-tower-import"),

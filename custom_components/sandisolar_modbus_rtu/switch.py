@@ -104,7 +104,7 @@ REGISTER_SWITCHES = [
     },
     {
         "key": "ac_charge_enable",
-        "name": "AC Charging",
+        "name": "Battery AC Charging",
         "icon": "mdi:battery-charging",
         "advanced": False,
     },

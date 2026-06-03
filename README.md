@@ -4,9 +4,9 @@ Hybridní měnič **SANDISOLAR SD-PRO-EU** konečně pořádně v Home Assistant
 
 <img width="250" height="250" alt="SandiSolar_HA" src="https://github.com/vsajer/sandisolar-ha/blob/main/custom_components/sandisolar_modbus_rtu/brand/logo.png" />
 
-[![HACS](https://img.shields.io/badge/HACS-Custom-blue.svg)]()
-[![Version](https://img.shields.io/github/v/release/vsajer/sandisolar-ha)]()
-[![License](https://img.shields.io/github/license/vsajer/sandisolar-ha)]()
+[![HACS](https://img.shields.io/badge/HACS-Custom-blue.svg)](https://github.com/hacs/integration)
+[![Version](https://img.shields.io/github/v/release/vsajer/sandisolar-ha)](https://github.com/vsajer/sandisolar-ha/releases)
+[![License](https://img.shields.io/github/license/vsajer/sandisolar-ha)](https://github.com/vsajer/sandisolar-ha/blob/main/LICENSE)
 
 Native Home Assistant integration for the **SANDISOLAR SD-PRO-EU Hybrid Inverter** using **Modbus RTU over RS485**.
 

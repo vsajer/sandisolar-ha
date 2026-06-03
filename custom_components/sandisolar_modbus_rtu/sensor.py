@@ -1,6 +1,8 @@
+import json
 import logging
 from collections import deque
 from datetime import timedelta
+from pathlib import Path
 
 from homeassistant.components.sensor import (
     SensorEntity,
@@ -40,6 +42,9 @@ DEFAULT_BATTERY_CAPACITY_AH = 316
 DEFAULT_END_OF_CHARGE_SOC = 98
 CHARGE_ETA_MAX_HOURS = 12
 CHARGE_ETA_HYSTERESIS = 2
+
+TRANSLATIONS_DIR = Path(__file__).parent / "translations"
+_TRANSLATION_CACHE = {}
 
 
 GRID_STATUS_MAP = {
@@ -187,6 +192,56 @@ def _clamp(value, min_value, max_value):
     return max(min_value, min(max_value, value))
 
 
+def _load_language_file(language: str) -> dict:
+    """Load integration translation JSON file."""
+
+    language = (language or "en").split("-")[0].lower()
+
+    if language in _TRANSLATION_CACHE:
+        return _TRANSLATION_CACHE[language]
+
+    path = TRANSLATIONS_DIR / f"{language}.json"
+
+    if not path.exists():
+        path = TRANSLATIONS_DIR / "en.json"
+
+    try:
+        with path.open("r", encoding="utf-8") as file:
+            data = json.load(file)
+    except Exception as err:
+        _LOGGER.warning(
+            "SANDISOLAR: Failed to load translation file %s: %s",
+            path,
+            err,
+        )
+        data = {}
+
+    _TRANSLATION_CACHE[language] = data
+    return data
+
+
+def _translated_state(language: str, section: str, code, fallback: str) -> str:
+    """Translate state/warning/fault text by code."""
+
+    data = _load_language_file(language)
+
+    try:
+        return data["states"][section][str(int(code))]
+    except Exception:
+        return fallback
+
+
+def _translated_unknown(language: str, key: str, fallback: str) -> str:
+    """Translate unknown fallback text."""
+
+    data = _load_language_file(language)
+
+    try:
+        return data["states"]["unknown"][key]
+    except Exception:
+        return fallback
+
+
 class SandiSolarSensorCoordinator(DataUpdateCoordinator):
     """Coordinator for SANDISOLAR sensors."""
 
@@ -252,6 +307,27 @@ class BaseSandiSensor(CoordinatorEntity, SensorEntity):
     def _get_cached_holding(self, key, default=None):
         """Get cached holding register value from hub."""
         return _safe_float(self.coordinator.hub.get_cached(key), default)
+
+    def _language(self):
+        """Return current Home Assistant language."""
+        return self.coordinator.hass.config.language or "en"
+
+    def _tr_state(self, section: str, code, fallback: str) -> str:
+        """Translate state text."""
+        return _translated_state(
+            self._language(),
+            section,
+            code,
+            fallback,
+        )
+
+    def _tr_unknown(self, key: str, fallback: str) -> str:
+        """Translate unknown text."""
+        return _translated_unknown(
+            self._language(),
+            key,
+            fallback,
+        )
 
     async def async_added_to_hass(self):
         """Entity added to Home Assistant."""
@@ -322,9 +398,6 @@ class EnergySensor(BaseSandiSensor):
         if self._last_value is not None and val < self._last_value:
             diff = self._last_value - val
 
-            # SANDISOLAR sometimes reports a small lower value because of rounding.
-            # Keep previous value for small drops, but allow large drops such as
-            # midnight reset of daily counters.
             if diff <= 0.5:
                 val = self._last_value
 
@@ -515,10 +588,7 @@ class BatteryPowerSpeedSensor(BaseSandiSensor):
 
         avg_power = sum(self._samples) / len(self._samples)
 
-        # W / V = A. A over one hour = Ah/h.
         ah_per_hour = avg_power / voltage
-
-        # Ah/h / Ah * 100 = %/h.
         percent_per_hour = (ah_per_hour / capacity_ah) * 100
 
         self._attr_native_value = round(percent_per_hour, 2)
@@ -711,7 +781,10 @@ class BatteryChargeEtaSensor(BaseSandiSensor):
         self._charged_date = None
 
     def _target_soc(self):
-        target = self._get_cached_holding("end_of_charge_soc", DEFAULT_END_OF_CHARGE_SOC)
+        target = self._get_cached_holding(
+            "end_of_charge_soc",
+            DEFAULT_END_OF_CHARGE_SOC,
+        )
 
         if target is None:
             return DEFAULT_END_OF_CHARGE_SOC
@@ -786,7 +859,6 @@ class BatteryChargeEtaSensor(BaseSandiSensor):
             return
 
         soc = float(soc)
-
         today = now_local.date()
 
         if self._charged_date is not None and self._charged_date != today:
@@ -885,7 +957,10 @@ class BatterySocRealSensor(BaseSandiSensor):
     _attr_icon = "mdi:battery-sync"
 
     def _target_soc(self):
-        target = self._get_cached_holding("end_of_charge_soc", DEFAULT_END_OF_CHARGE_SOC)
+        target = self._get_cached_holding(
+            "end_of_charge_soc",
+            DEFAULT_END_OF_CHARGE_SOC,
+        )
 
         if target is None:
             return DEFAULT_END_OF_CHARGE_SOC
@@ -966,7 +1041,11 @@ class FaultWord0TextSensor(BaseSandiSensor):
             return
 
         code = int(val)
-        text = FAULT_WORD0_MAP.get(code, "Unknown fault code")
+        fallback = FAULT_WORD0_MAP.get(code, "Unknown fault code")
+        text = self._tr_state("fault_word0", code, fallback)
+
+        if code not in FAULT_WORD0_MAP:
+            text = self._tr_unknown("fault_code", fallback)
 
         self._attr_native_value = f"{code} - {text}"
         self._attr_extra_state_attributes = {
@@ -999,7 +1078,11 @@ class WarningMainTextSensor(BaseSandiSensor):
             return
 
         code = int(val)
-        text = WARNING_MAIN_MAP.get(code, "Unknown warning code")
+        fallback = WARNING_MAIN_MAP.get(code, "Unknown warning code")
+        text = self._tr_state("warning_main", code, fallback)
+
+        if code not in WARNING_MAIN_MAP:
+            text = self._tr_unknown("warning_code", fallback)
 
         self._attr_native_value = f"{code} - {text}"
         self._attr_extra_state_attributes = {
@@ -1032,7 +1115,11 @@ class WarningSubTextSensor(BaseSandiSensor):
             return
 
         code = int(val)
-        text = WARNING_SUB_MAP.get(code, "Unknown sub-warning code")
+        fallback = WARNING_SUB_MAP.get(code, "Unknown sub-warning code")
+        text = self._tr_state("warning_sub", code, fallback)
+
+        if code not in WARNING_SUB_MAP:
+            text = self._tr_unknown("sub_warning_code", fallback)
 
         self._attr_native_value = f"{code} - {text}"
         self._attr_extra_state_attributes = {
@@ -1052,10 +1139,21 @@ class BatteryStatusTextSensor(BaseSandiSensor):
             return
 
         code = int(val)
-        self._attr_native_value = BATTERY_STATUS_MAP.get(
+        fallback = BATTERY_STATUS_MAP.get(
             code,
             f"Raw BMS status: {code}",
         )
+        text = self._tr_state("battery_status", code, fallback)
+
+        if code not in BATTERY_STATUS_MAP:
+            unknown = self._tr_unknown("battery_status", "Unknown BMS status")
+            text = f"{unknown}: {code}"
+
+        self._attr_native_value = text
+        self._attr_extra_state_attributes = {
+            "raw_value": code,
+            "message": text,
+        }
 
 
 class GridStatusTextSensor(BaseSandiSensor):
@@ -1069,10 +1167,20 @@ class GridStatusTextSensor(BaseSandiSensor):
             return
 
         code = int(val)
-        self._attr_native_value = GRID_STATUS_MAP.get(
+        fallback = GRID_STATUS_MAP.get(
             code,
             "Unknown inverter status",
         )
+        text = self._tr_state("inverter_status", code, fallback)
+
+        if code not in GRID_STATUS_MAP:
+            text = self._tr_unknown("inverter_status", fallback)
+
+        self._attr_native_value = text
+        self._attr_extra_state_attributes = {
+            "raw_value": code,
+            "message": text,
+        }
 
 
 async def async_setup_entry(hass, entry, async_add_entities):

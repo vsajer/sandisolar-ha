@@ -3,19 +3,21 @@
   "config": {
     "step": {
       "user": {
-        "title": "SANDISOLAR Modbus RTU",
-        "description": "Modbus-RTU-Verbindung konfigurieren.",
+        "title": "SANDISOLAR Modbus RTU konfigurieren",
+        "description": "Verbindungsdaten für Ihren SANDISOLAR-Wechselrichter eingeben.",
         "data": {
           "port": "Serieller Port",
           "baudrate": "Baudrate",
-          "slave": "Modbus-Geräteadresse",
-          "update_interval": "Aktualisierungsintervall"
+          "slave": "Slave-ID",
+          "update_interval": "Aktualisierungsintervall (Sekunden)"
         }
       }
     },
     "error": {
-      "cannot_connect": "Verbindung zum Wechselrichter nicht möglich.",
+      "cannot_connect": "Verbindung zum Gerät fehlgeschlagen.",
       "invalid_port": "Ungültiger serieller Port.",
+      "invalid_slave": "Slave-ID muss zwischen 1 und 247 liegen.",
+      "invalid_update_interval": "Aktualisierungsintervall muss mindestens 5 Sekunden betragen.",
       "unknown": "Unbekannter Fehler."
     },
     "abort": {
@@ -26,11 +28,14 @@
     "step": {
       "init": {
         "title": "SANDISOLAR Modbus RTU Optionen",
-        "description": "Kommunikations- und Aktualisierungseinstellungen anpassen.",
+        "description": "Aktualisierungsintervall anpassen.",
         "data": {
-          "update_interval": "Aktualisierungsintervall"
+          "update_interval": "Aktualisierungsintervall (Sekunden)"
         }
       }
+    },
+    "error": {
+      "invalid_update_interval": "Aktualisierungsintervall muss mindestens 5 Sekunden betragen."
     }
   },
   "states": {

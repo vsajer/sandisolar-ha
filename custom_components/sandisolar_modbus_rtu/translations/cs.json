@@ -3,19 +3,21 @@
   "config": {
     "step": {
       "user": {
-        "title": "SANDISOLAR Modbus RTU",
-        "description": "Nastavení Modbus RTU připojení.",
+        "title": "Nastavení SANDISOLAR Modbus RTU",
+        "description": "Zadej údaje pro připojení měniče SANDISOLAR.",
         "data": {
           "port": "Sériový port",
           "baudrate": "Rychlost komunikace",
-          "slave": "Modbus adresa zařízení",
-          "update_interval": "Interval aktualizace"
+          "slave": "Slave ID",
+          "update_interval": "Interval aktualizace (sekundy)"
         }
       }
     },
     "error": {
-      "cannot_connect": "Nelze se připojit k měniči.",
+      "cannot_connect": "Nepodařilo se připojit k zařízení.",
       "invalid_port": "Neplatný sériový port.",
+      "invalid_slave": "Slave ID musí být mezi 1 a 247.",
+      "invalid_update_interval": "Interval aktualizace musí být alespoň 5 sekund.",
       "unknown": "Neznámá chyba."
     },
     "abort": {
@@ -26,11 +28,14 @@
     "step": {
       "init": {
         "title": "Možnosti SANDISOLAR Modbus RTU",
-        "description": "Uprav nastavení komunikace a čtení.",
+        "description": "Uprav interval aktualizace.",
         "data": {
-          "update_interval": "Interval aktualizace"
+          "update_interval": "Interval aktualizace (sekundy)"
         }
       }
+    },
+    "error": {
+      "invalid_update_interval": "Interval aktualizace musí být alespoň 5 sekund."
     }
   },
   "states": {

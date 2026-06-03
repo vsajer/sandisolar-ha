@@ -3,19 +3,21 @@
   "config": {
     "step": {
       "user": {
-        "title": "SANDISOLAR Modbus RTU",
-        "description": "Konfiguracja połączenia Modbus RTU.",
+        "title": "Konfiguracja SANDISOLAR Modbus RTU",
+        "description": "Wprowadź dane połączenia falownika SANDISOLAR.",
         "data": {
           "port": "Port szeregowy",
           "baudrate": "Prędkość transmisji",
-          "slave": "Adres urządzenia Modbus",
-          "update_interval": "Interwał aktualizacji"
+          "slave": "Slave ID",
+          "update_interval": "Interwał aktualizacji (sekundy)"
         }
       }
     },
     "error": {
-      "cannot_connect": "Nie można połączyć się z falownikiem.",
+      "cannot_connect": "Nie udało się połączyć z urządzeniem.",
       "invalid_port": "Nieprawidłowy port szeregowy.",
+      "invalid_slave": "Slave ID musi być w zakresie od 1 do 247.",
+      "invalid_update_interval": "Interwał aktualizacji musi wynosić co najmniej 5 sekund.",
       "unknown": "Nieznany błąd."
     },
     "abort": {
@@ -26,11 +28,14 @@
     "step": {
       "init": {
         "title": "Opcje SANDISOLAR Modbus RTU",
-        "description": "Dostosuj ustawienia komunikacji i aktualizacji.",
+        "description": "Dostosuj interwał aktualizacji.",
         "data": {
-          "update_interval": "Interwał aktualizacji"
+          "update_interval": "Interwał aktualizacji (sekundy)"
         }
       }
+    },
+    "error": {
+      "invalid_update_interval": "Interwał aktualizacji musi wynosić co najmniej 5 sekund."
     }
   },
   "states": {

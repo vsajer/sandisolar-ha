@@ -2,6 +2,7 @@ import asyncio
 import logging
 
 from homeassistant.components.select import SelectEntity
+from homeassistant.const import EntityCategory
 
 from .const import DOMAIN
 
@@ -31,6 +32,15 @@ GEN_PORT_WORK_MODE_OPTIONS = {
     "6 – AC Couple on SecEPS Side": 6,
 }
 
+# Hodnoty zatím nemáme spolehlivě potvrzené z dokumentace.
+# Proto nechávám obecné názvy a raw_value v atributech.
+AC_INPUT_TYPE_OPTIONS = {
+    "0 – Type 0": 0,
+    "1 – Type 1": 1,
+    "2 – Type 2": 2,
+    "3 – Type 3": 3,
+}
+
 
 async def async_setup_entry(hass, entry, async_add_entities):
     data = hass.data[DOMAIN][entry.entry_id]
@@ -58,6 +68,14 @@ async def async_setup_entry(hass, entry, async_add_entities):
             GEN_PORT_WORK_MODE_OPTIONS,
             "mdi:dip-switch",
         ),
+        SandiSolarSelect(
+            hub,
+            "ac_input_type",
+            "ADV - AC Input Type",
+            AC_INPUT_TYPE_OPTIONS,
+            "mdi:connection",
+            advanced=True,
+        ),
     ]
 
     async_add_entities(entities)
@@ -69,7 +87,7 @@ class SandiSolarSelect(SelectEntity):
     _attr_has_entity_name = True
     _attr_should_poll = False
 
-    def __init__(self, hub, key, name, mapping, icon):
+    def __init__(self, hub, key, name, mapping, icon, advanced=False):
         self._hub = hub
         self._key = key
         self._mapping = mapping
@@ -80,6 +98,10 @@ class SandiSolarSelect(SelectEntity):
         self._attr_icon = icon
         self._attr_available = True
         self._attr_extra_state_attributes = {}
+
+        if advanced:
+            self._attr_entity_category = EntityCategory.CONFIG
+            self._attr_entity_registry_enabled_default = False
 
         self._state = None
         self._unknown_option = None
@@ -102,15 +124,10 @@ class SandiSolarSelect(SelectEntity):
             if int(value) == int(self._state):
                 return label
 
-        # Když měnič vrátí hodnotu mimo známou mapu,
-        # neukazuj jen "unknown", ale konkrétní raw hodnotu.
         return self._unknown_option
 
     async def async_added_to_hass(self):
         """Read initial value once when entity is added to Home Assistant."""
-
-        # Po startu HA / restartu měniče nemusí být Modbus hned připravený.
-        # Zkusíme pár pokusů, ať entita nezůstane navždy unknown.
         for attempt in range(3):
             await self.async_update()
 
@@ -123,11 +140,9 @@ class SandiSolarSelect(SelectEntity):
 
     async def async_update(self):
         """Read current select value from inverter."""
-
         val = await self._hub.read_holding_register(self._key)
 
         if val is None:
-            # Když čtení selže, zkus cache z hubu.
             cached = self._hub.get_cached(self._key)
 
             if cached is None:
@@ -149,8 +164,6 @@ class SandiSolarSelect(SelectEntity):
             "known_values": dict(self._mapping),
         }
 
-        # Pokud je hodnota mimo známé možnosti, přidej do options
-        # dočasnou položku Unknown (x), aby HA select neukazoval prázdné unknown.
         known_values = [int(v) for v in self._mapping.values()]
 
         if self._state not in known_values:

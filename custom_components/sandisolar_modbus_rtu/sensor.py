@@ -124,6 +124,11 @@ SENSOR_KEYS = [
     "battery_discharge_energy_today",
     "battery_discharge_energy_total",
 
+    "inv_temp",
+    "boost_temp",
+    "llc_temp",
+    "ambient_temp",
+
     "grid_voltage",
     "grid_current",
     "grid_frequency",
@@ -490,6 +495,15 @@ async def async_setup_entry(hass, entry, async_add_entities):
                      UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT, "mdi:current-dc", 2),
 
         BatteryPowerSensor(coordinator, "battery_power", "Battery Power"),
+
+        SimpleSensor(coordinator, "inv_temp", "Inverter Base Temperature",
+                     UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE, "mdi:thermometer", 1),
+        SimpleSensor(coordinator, "boost_temp", "Inverter Boost Temperature",
+                     UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE, "mdi:thermometer-high", 1),
+        SimpleSensor(coordinator, "llc_temp", "Inverter LLC Temperature",
+                     UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE, "mdi:thermometer-lines", 1),
+        SimpleSensor(coordinator, "ambient_temp", "Inverter Ambient Temperature",
+                     UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE, "mdi:home-thermometer-outline", 1),
 
         SimpleSensor(coordinator, "bms_max_charge_current", "BMS Max Charge Current",
                      UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT, "mdi:battery-plus", 1),

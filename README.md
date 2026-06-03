@@ -2,7 +2,7 @@
 
 Hybridní měnič **SANDISOLAR SD-PRO-EU** konečně pořádně v Home Assistantu — bez cloudu, přes **Modbus RTU / RS485**, s rychlou odezvou, přehlednými senzory, ovládáním a pokročilými výpočty.
 
-<img width="250" height="250" alt="SandiSolar_HA" src="https://github.com/vsajer/sandisolar-ha/blob/main/custom_components/sandisolar_modbus_rtu/brand/SandiSolar_HA.png" />
+<img width="250" height="250" alt="SandiSolar_HA" src="https://github.com/vsajer/sandisolar-ha/blob/main/custom_components/sandisolar_modbus_rtu/brand/logo.png" />
 
 [![HACS](https://img.shields.io/badge/HACS-Custom-blue.svg)]()
 [![Version](https://img.shields.io/github/v/release/vsajer/sandisolar-ha)]()

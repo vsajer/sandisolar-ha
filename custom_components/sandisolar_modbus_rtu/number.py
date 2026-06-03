@@ -34,12 +34,12 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
     entities = [
         # -------------------------------------------------------------
-        # Charge / Discharge Limits (%)
+        # Battery charge / discharge limits (%)
         # -------------------------------------------------------------
         SandiSolarNumber(
             hub,
             "charge_limit",
-            "Charge Limit",
+            "Battery Charge Limit",
             PERCENTAGE,
             10,
             100,
@@ -49,7 +49,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         SandiSolarNumber(
             hub,
             "discharge_limit",
-            "Discharge Limit",
+            "Battery Discharge Limit",
             PERCENTAGE,
             10,
             100,
@@ -112,13 +112,13 @@ async def async_setup_entry(hass, entry, async_add_entities):
         ),
 
         # -------------------------------------------------------------
-        # AC Charge Current Limit
+        # Battery AC charge current limit
         # scale řeší modbus_map.py: RegisterDef(189, 0.1)
         # -------------------------------------------------------------
         SandiSolarNumber(
             hub,
             "ac_charge_current_limit",
-            "AC Charge Current Limit",
+            "Battery AC Charge Current Limit",
             UnitOfElectricCurrent.AMPERE,
             10,
             100,
@@ -225,7 +225,9 @@ class SandiSolarNumber(NumberEntity):
     """Modbus number entity for SANDISOLAR SD-PRO-EU."""
 
     _attr_has_entity_name = True
-    _attr_mode = "slider"
+
+    # Číselné zadávání místo posuvníku.
+    _attr_mode = "box"
 
     # Tohle jsou konfigurační hodnoty, ne živé senzory.
     # Nechceme, aby každá number entita pořád sama pollovala Modbus.

@@ -1,0 +1,104 @@
+{
+  "title": "SANDISOLAR / SD-PRO-EU Modbus RTU",
+  "config": {
+    "step": {
+      "user": {
+        "title": "SANDISOLAR Modbus RTU",
+        "description": "Nastavenie pripojenia Modbus RTU.",
+        "data": {
+          "port": "Sériový port",
+          "baudrate": "Rýchlosť komunikácie",
+          "slave": "Modbus adresa zariadenia",
+          "update_interval": "Interval aktualizácie"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Nie je možné pripojiť sa k meniču.",
+      "invalid_port": "Neplatný sériový port.",
+      "unknown": "Neznáma chyba."
+    },
+    "abort": {
+      "already_configured": "Toto zariadenie je už nastavené."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Možnosti SANDISOLAR Modbus RTU",
+        "description": "Uprav nastavenia komunikácie a čítania.",
+        "data": {
+          "update_interval": "Interval aktualizácie"
+        }
+      }
+    }
+  },
+  "states": {
+    "inverter_status": {
+      "0": "Čakanie",
+      "1": "Sieťový režim",
+      "2": "Ostrovný režim",
+      "3": "Porucha",
+      "4": "Aktualizácia / flashovanie",
+      "5": "Bypass",
+      "6": "Vlastné nabíjanie"
+    },
+    "battery_status": {
+      "0": "Normálny stav",
+      "1": "Nabíjanie",
+      "2": "Vybíjanie",
+      "3": "Pohotovostný režim"
+    },
+    "fault_word0": {
+      "0": "Bez poruchy",
+      "103": "DC offset meniča je príliš vysoký",
+      "105": "Bypass AC výstup je preťažený",
+      "200": "Ostrovné výstupné napätie je príliš nízke",
+      "201": "Ostrovné výstupné napätie je príliš vysoké",
+      "202": "Skrat na ostrovnom výstupe",
+      "203": "Preťaženie ostrovného výstupu",
+      "204": "Abnormálna DC zložka na ostrovnom výstupe",
+      "301": "Batéria je odpojená",
+      "305": "Prepätie batérie",
+      "306": "Nadprúd batérie",
+      "307": "Chyba komunikácie s batériou",
+      "308": "Porucha BMS",
+      "400": "Prepätie FV vstupu",
+      "403": "Skrat FV vstupu",
+      "404": "Obrátená polarita FV vstupu",
+      "500": "Abnormálne napätie DC zbernice",
+      "501": "Chyba merania napätia DC zbernice",
+      "502": "Vnútorná komunikačná chyba zariadenia",
+      "505": "Chyba pripojenia teplotného senzora",
+      "506": "Prehriatie zariadenia",
+      "507": "Chyba relé",
+      "509": "Timeout ochrany proti pretokom",
+      "510": "Nesúlad verzie softvéru",
+      "511": "Porucha ventilátora",
+      "513": "Chyba paralelnej prevádzky"
+    },
+    "warning_main": {
+      "0": "OK",
+      "103": "Sieť nie je dostupná",
+      "104": "Napätie siete je mimo rozsah",
+      "105": "Frekvencia siete je mimo rozsah",
+      "106": "Generátor nedodáva výstupné napätie",
+      "107": "Výstupné napätie generátora je mimo rozsah",
+      "108": "Výstupná frekvencia generátora je mimo rozsah",
+      "302": "Nízky stav batérie",
+      "304": "Abnormálne informácie z BMS",
+      "305": "Nízke napätie batérie",
+      "502": "Chyba čítania / zápisu pamäte"
+    },
+    "warning_sub": {
+      "0": "Bez varovania"
+    },
+    "unknown": {
+      "fault_code": "Neznámy kód poruchy",
+      "warning_code": "Neznámy kód varovania",
+      "sub_warning_code": "Neznámy vedľajší kód varovania",
+      "battery_status": "Neznámy stav BMS",
+      "inverter_status": "Neznámy stav meniča"
+    }
+  }
+}

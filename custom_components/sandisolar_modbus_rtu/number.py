@@ -8,10 +8,14 @@ from homeassistant.const import (
     UnitOfPower,
     EntityCategory,
 )
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
+
+
+DEFAULT_BATTERY_CAPACITY_AH = 316
 
 
 def _is_sane_soc(value) -> bool:
@@ -54,26 +58,22 @@ async def async_setup_entry(hass, entry, async_add_entities):
         ),
 
         # -------------------------------------------------------------
-        # End of Charge SOC (%)
+        # Battery SOC settings
         # -------------------------------------------------------------
         SandiSolarNumber(
             hub,
             "end_of_charge_soc",
-            "End of Charge SOC",
+            "Battery End of Charge SOC",
             PERCENTAGE,
             10,
             100,
             1,
             "mdi:battery-heart",
         ),
-
-        # -------------------------------------------------------------
-        # SOC Limits (%)
-        # -------------------------------------------------------------
         SandiSolarNumber(
             hub,
             "on_grid_discharge_soc",
-            "On-Grid Discharge SOC",
+            "Battery On-Grid Discharge SOC",
             PERCENTAGE,
             10,
             100,
@@ -83,7 +83,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         SandiSolarNumber(
             hub,
             "off_grid_discharge_soc",
-            "Off-Grid Discharge SOC",
+            "Battery Off-Grid Discharge SOC",
             PERCENTAGE,
             10,
             100,
@@ -93,7 +93,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         SandiSolarNumber(
             hub,
             "on_grid_recovery_soc",
-            "On-Grid Recovery SOC",
+            "Battery On-Grid Recovery SOC",
             PERCENTAGE,
             10,
             100,
@@ -103,7 +103,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         SandiSolarNumber(
             hub,
             "off_grid_recovery_soc",
-            "Off-Grid Recovery SOC",
+            "Battery Off-Grid Recovery SOC",
             PERCENTAGE,
             10,
             100,
@@ -124,6 +124,21 @@ async def async_setup_entry(hass, entry, async_add_entities):
             100,
             0.1,
             "mdi:current-ac",
+        ),
+
+        # -------------------------------------------------------------
+        # Local HA-only settings
+        # -------------------------------------------------------------
+        SandiSolarLocalNumber(
+            hub,
+            "battery_capacity_manual",
+            "Battery Capacity Manual",
+            "Ah",
+            10,
+            1000,
+            1,
+            "mdi:battery-heart-variant",
+            DEFAULT_BATTERY_CAPACITY_AH,
         ),
 
         # -------------------------------------------------------------
@@ -162,36 +177,34 @@ async def async_setup_entry(hass, entry, async_add_entities):
         #
         # Tyhle jsou schované jako Advanced / Config.
         # Pro lithium/BMS režim jsou spíš pokročilé nastavení.
+        # Zatím je nechávám zakomentované, jak jsi měl.
         # -------------------------------------------------------------
-        #SandiSolarNumber(
-        #    hub,
-        #    "sec_eps_on_vbat",
-        #    "ADV - SecEPS ON Voltage",
-        #    UnitOfElectricPotential.VOLT,
-        #    40,
-        #    70,
-        #    0.1,
-        #    "mdi:alert-circle-outline",
-        #    advanced=True,
-        #),
-        #SandiSolarNumber(
-        #    hub,
-        #    "sec_eps_off_vbat",
-        #    "ADV - SecEPS OFF Voltage",
-        #    UnitOfElectricPotential.VOLT,
-        #    40,
-        #    70,
-        #    0.1,
-        #    "mdi:alert-circle-outline",
-        #    advanced=True,
-        #),
+        # SandiSolarNumber(
+        #     hub,
+        #     "sec_eps_on_vbat",
+        #     "ADV - SecEPS ON Voltage",
+        #     UnitOfElectricPotential.VOLT,
+        #     40,
+        #     70,
+        #     0.1,
+        #     "mdi:alert-circle-outline",
+        #     advanced=True,
+        # ),
+        # SandiSolarNumber(
+        #     hub,
+        #     "sec_eps_off_vbat",
+        #     "ADV - SecEPS OFF Voltage",
+        #     UnitOfElectricPotential.VOLT,
+        #     40,
+        #     70,
+        #     0.1,
+        #     "mdi:alert-circle-outline",
+        #     advanced=True,
+        # ),
 
         # -------------------------------------------------------------
         # SecEPS ON PV Power Min
         # scale řeší modbus_map.py: RegisterDef(223, 10)
-        #
-        # Měnič odmítal 10000 W, proto UI omezujeme na 0–3000 W.
-        # Výchozí hodnota v dokumentaci bývá okolo 3000 W.
         # -------------------------------------------------------------
         SandiSolarNumber(
             hub,
@@ -209,7 +222,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
 
 class SandiSolarNumber(NumberEntity):
-    """Number entity for SANDISOLAR SD-PRO-EU."""
+    """Modbus number entity for SANDISOLAR SD-PRO-EU."""
 
     _attr_has_entity_name = True
     _attr_mode = "slider"
@@ -349,4 +362,98 @@ class SandiSolarNumber(NumberEntity):
         # ale zbytečně teď nezahlcujeme Modbus.
         self._state = self._normalize_value(write_value)
         self._attr_available = True
+        self.async_write_ha_state()
+
+
+class SandiSolarLocalNumber(NumberEntity, RestoreEntity):
+    """Local Home Assistant number entity, not written to inverter."""
+
+    _attr_has_entity_name = True
+    _attr_mode = "box"
+    _attr_should_poll = False
+
+    def __init__(
+        self,
+        hub,
+        key,
+        name,
+        unit,
+        min_value,
+        max_value,
+        step,
+        icon,
+        default_value,
+        advanced=False,
+    ):
+        self._hub = hub
+        self._key = key
+        self._default_value = float(default_value)
+
+        self._attr_name = name
+        self._attr_unique_id = f"sandisolar_local_number_{key}"
+        self._attr_native_unit_of_measurement = unit
+        self._attr_native_min_value = min_value
+        self._attr_native_max_value = max_value
+        self._attr_native_step = step
+        self._attr_icon = icon
+        self._attr_available = True
+
+        if advanced:
+            self._attr_entity_category = EntityCategory.CONFIG
+            self._attr_entity_registry_enabled_default = False
+
+        self._state = None
+
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {("sandisolar_modbus_rtu", "sdproeu_main")},
+            "name": "SANDISOLAR SD-PRO-EU",
+            "manufacturer": "SANDISOLAR",
+            "model": "SD-PRO-EU",
+        }
+
+    @property
+    def native_value(self):
+        return self._state
+
+    async def async_added_to_hass(self):
+        """Restore local value after Home Assistant restart."""
+        last_state = await self.async_get_last_state()
+
+        if last_state is not None and last_state.state not in (
+            "unknown",
+            "unavailable",
+            None,
+        ):
+            try:
+                self._state = round(float(last_state.state), 3)
+            except (TypeError, ValueError):
+                self._state = self._default_value
+        else:
+            self._state = self._default_value
+
+        # Ulož do cache hubu, aby to mohly použít virtuální senzory.
+        self._hub._cache[self._key] = self._state
+
+        self.async_write_ha_state()
+
+    async def async_set_native_value(self, value: float):
+        """Set local value and store it in hub cache."""
+
+        write_value = round(float(value), 3)
+
+        if write_value < self._attr_native_min_value:
+            write_value = self._attr_native_min_value
+
+        if write_value > self._attr_native_max_value:
+            write_value = self._attr_native_max_value
+
+        self._state = write_value
+        self._attr_available = True
+
+        # Tohle je lokální HA hodnota. Nezapisuje se do měniče.
+        # Cache používá sensor.py pro výpočty rychlosti a kapacity.
+        self._hub._cache[self._key] = self._state
+
         self.async_write_ha_state()

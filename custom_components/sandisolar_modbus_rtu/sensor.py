@@ -420,6 +420,125 @@ class SimpleSensor(BaseSandiSensor):
         )
 
 
+
+class BatteryFccSensor(BaseSandiSensor):
+    """Battery Full Charge Capacity with fallback to manual capacity."""
+
+    _attr_native_unit_of_measurement = "Ah"
+    _attr_icon = "mdi:battery-heart"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def _update_from_data(self):
+        raw_fcc = _safe_float(self._get_value("bms_fcc"), 0)
+        manual_capacity = self._get_cached_holding(
+            "battery_capacity_manual",
+            DEFAULT_BATTERY_CAPACITY_AH,
+        )
+        soh = _safe_float(self._get_value("bms_soh"), 0)
+
+        if raw_fcc is not None and raw_fcc > 0:
+            self._attr_native_value = round(raw_fcc, 1)
+            self._attr_extra_state_attributes = {
+                "source": "bms_fcc",
+                "raw_bms_fcc_ah": round(raw_fcc, 1),
+                "manual_capacity_ah": (
+                    round(manual_capacity, 1)
+                    if manual_capacity is not None
+                    else None
+                ),
+                "battery_soh_percent": round(soh, 1) if soh else None,
+                "fallback_used": False,
+            }
+            return
+
+        if manual_capacity is None or manual_capacity <= 0:
+            manual_capacity = DEFAULT_BATTERY_CAPACITY_AH
+
+        if soh is not None and soh > 0:
+            fake_fcc = manual_capacity * soh / 100
+            source = "battery_capacity_manual_minus_soh"
+        else:
+            fake_fcc = manual_capacity
+            source = "battery_capacity_manual"
+
+        self._attr_native_value = round(fake_fcc, 1)
+        self._attr_extra_state_attributes = {
+            "source": source,
+            "raw_bms_fcc_ah": raw_fcc,
+            "manual_capacity_ah": round(manual_capacity, 1),
+            "battery_soh_percent": round(soh, 1) if soh else None,
+            "fallback_used": True,
+        }
+
+
+class BatteryRmSensor(BaseSandiSensor):
+    """Battery Remaining Capacity with fallback calculated from FCC and SOC."""
+
+    _attr_native_unit_of_measurement = "Ah"
+    _attr_icon = "mdi:battery-clock"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def _effective_fcc(self):
+        raw_fcc = _safe_float(self._get_value("bms_fcc"), 0)
+        manual_capacity = self._get_cached_holding(
+            "battery_capacity_manual",
+            DEFAULT_BATTERY_CAPACITY_AH,
+        )
+        soh = _safe_float(self._get_value("bms_soh"), 0)
+
+        if raw_fcc is not None and raw_fcc > 0:
+            return raw_fcc, "bms_fcc"
+
+        if manual_capacity is None or manual_capacity <= 0:
+            manual_capacity = DEFAULT_BATTERY_CAPACITY_AH
+
+        if soh is not None and soh > 0:
+            return (
+                manual_capacity * soh / 100,
+                "battery_capacity_manual_minus_soh",
+            )
+
+        return manual_capacity, "battery_capacity_manual"
+
+    def _update_from_data(self):
+        raw_rm = _safe_float(self._get_value("bms_rm"), 0)
+        soc = _safe_float(self._get_value("battery_soc"), 0)
+
+        if raw_rm is not None and raw_rm > 0:
+            self._attr_native_value = round(raw_rm, 1)
+            self._attr_extra_state_attributes = {
+                "source": "bms_rm",
+                "raw_bms_rm_ah": round(raw_rm, 1),
+                "fallback_used": False,
+            }
+            return
+
+        fcc, fcc_source = self._effective_fcc()
+
+        if soc is None:
+            self._attr_native_value = None
+            self._attr_extra_state_attributes = {
+                "source": "unavailable",
+                "reason": "battery_soc_unavailable",
+                "fallback_used": True,
+            }
+            return
+
+        soc = _clamp(float(soc), 0, 100)
+        fake_rm = fcc * soc / 100
+
+        self._attr_native_value = round(fake_rm, 1)
+        self._attr_extra_state_attributes = {
+            "source": "calculated_from_fcc_and_soc",
+            "fcc_source": fcc_source,
+            "effective_fcc_ah": round(fcc, 1),
+            "battery_soc_percent": round(soc, 1),
+            "raw_bms_rm_ah": raw_rm,
+            "fallback_used": True,
+        }
+
+
+
 class EnergySensor(BaseSandiSensor):
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_device_class = SensorDeviceClass.ENERGY
@@ -591,14 +710,21 @@ class BatteryPowerSpeedSensor(BaseSandiSensor):
         return float(charge) - float(discharge)
 
     def _battery_capacity_ah(self):
-        fcc = _safe_float(self._get_value("bms_fcc"))
+        fcc = _safe_float(self._get_value("bms_fcc"), 0)
         manual = self._get_cached_holding("battery_capacity_manual")
-        rm = _safe_float(self._get_value("bms_rm"))
+        rm = _safe_float(self._get_value("bms_rm"), 0)
+        soh = _safe_float(self._get_value("bms_soh"), 0)
 
         if fcc is not None and fcc > 0:
             return fcc, "bms_fcc"
 
         if manual is not None and manual > 0:
+            if soh is not None and soh > 0:
+                return (
+                    manual * soh / 100,
+                    "battery_capacity_manual_minus_soh",
+                )
+
             return manual, "battery_capacity_manual"
 
         if rm is not None and rm > 0:
@@ -839,14 +965,21 @@ class BatteryChargeEtaSensor(BaseSandiSensor):
         return _clamp(float(target), 1, 100)
 
     def _battery_capacity_ah(self):
-        fcc = _safe_float(self._get_value("bms_fcc"))
+        fcc = _safe_float(self._get_value("bms_fcc"), 0)
         manual = self._get_cached_holding("battery_capacity_manual")
-        rm = _safe_float(self._get_value("bms_rm"))
+        rm = _safe_float(self._get_value("bms_rm"), 0)
+        soh = _safe_float(self._get_value("bms_soh"), 0)
 
         if fcc is not None and fcc > 0:
             return fcc, "bms_fcc"
 
         if manual is not None and manual > 0:
+            if soh is not None and soh > 0:
+                return (
+                    manual * soh / 100,
+                    "battery_capacity_manual_minus_soh",
+                )
+
             return manual, "battery_capacity_manual"
 
         if rm is not None and rm > 0:
@@ -1290,8 +1423,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
                      UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT, "mdi:battery-plus", 1),
         SimpleSensor(coordinator, "bms_max_discharge_current", "Battery Max Discharge Current",
                      UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT, "mdi:battery-minus", 1),
-        SimpleSensor(coordinator, "bms_fcc", "Battery FCC", "Ah", None, "mdi:battery-heart", 1),
-        SimpleSensor(coordinator, "bms_rm", "Battery RM", "Ah", None, "mdi:battery-clock", 1),
+        BatteryFccSensor(coordinator, "bms_fcc", "Battery FCC"),
+        BatteryRmSensor(coordinator, "bms_rm", "Battery RM"),
         SimpleSensor(coordinator, "bms_cycle_count", "Battery Cycle Count", None, None, "mdi:counter", 0),
         SimpleSensor(coordinator, "bms_soh", "Battery SOH", PERCENTAGE, None, "mdi:battery-check", 0),
 

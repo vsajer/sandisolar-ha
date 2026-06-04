@@ -17,6 +17,7 @@ from homeassistant.const import (
     UnitOfEnergy,
     UnitOfFrequency,
     UnitOfApparentPower,
+    UnitOfTime,
     PERCENTAGE,
 )
 from homeassistant.helpers.update_coordinator import (
@@ -420,125 +421,6 @@ class SimpleSensor(BaseSandiSensor):
         )
 
 
-
-class BatteryFccSensor(BaseSandiSensor):
-    """Battery Full Charge Capacity with fallback to manual capacity."""
-
-    _attr_native_unit_of_measurement = "Ah"
-    _attr_icon = "mdi:battery-heart"
-    _attr_state_class = SensorStateClass.MEASUREMENT
-
-    def _update_from_data(self):
-        raw_fcc = _safe_float(self._get_value("bms_fcc"), 0)
-        manual_capacity = self._get_cached_holding(
-            "battery_capacity_manual",
-            DEFAULT_BATTERY_CAPACITY_AH,
-        )
-        soh = _safe_float(self._get_value("bms_soh"), 0)
-
-        if raw_fcc is not None and raw_fcc > 0:
-            self._attr_native_value = round(raw_fcc, 1)
-            self._attr_extra_state_attributes = {
-                "source": "bms_fcc",
-                "raw_bms_fcc_ah": round(raw_fcc, 1),
-                "manual_capacity_ah": (
-                    round(manual_capacity, 1)
-                    if manual_capacity is not None
-                    else None
-                ),
-                "battery_soh_percent": round(soh, 1) if soh else None,
-                "fallback_used": False,
-            }
-            return
-
-        if manual_capacity is None or manual_capacity <= 0:
-            manual_capacity = DEFAULT_BATTERY_CAPACITY_AH
-
-        if soh is not None and soh > 0:
-            fake_fcc = manual_capacity * soh / 100
-            source = "battery_capacity_manual_minus_soh"
-        else:
-            fake_fcc = manual_capacity
-            source = "battery_capacity_manual"
-
-        self._attr_native_value = round(fake_fcc, 1)
-        self._attr_extra_state_attributes = {
-            "source": source,
-            "raw_bms_fcc_ah": raw_fcc,
-            "manual_capacity_ah": round(manual_capacity, 1),
-            "battery_soh_percent": round(soh, 1) if soh else None,
-            "fallback_used": True,
-        }
-
-
-class BatteryRmSensor(BaseSandiSensor):
-    """Battery Remaining Capacity with fallback calculated from FCC and SOC."""
-
-    _attr_native_unit_of_measurement = "Ah"
-    _attr_icon = "mdi:battery-clock"
-    _attr_state_class = SensorStateClass.MEASUREMENT
-
-    def _effective_fcc(self):
-        raw_fcc = _safe_float(self._get_value("bms_fcc"), 0)
-        manual_capacity = self._get_cached_holding(
-            "battery_capacity_manual",
-            DEFAULT_BATTERY_CAPACITY_AH,
-        )
-        soh = _safe_float(self._get_value("bms_soh"), 0)
-
-        if raw_fcc is not None and raw_fcc > 0:
-            return raw_fcc, "bms_fcc"
-
-        if manual_capacity is None or manual_capacity <= 0:
-            manual_capacity = DEFAULT_BATTERY_CAPACITY_AH
-
-        if soh is not None and soh > 0:
-            return (
-                manual_capacity * soh / 100,
-                "battery_capacity_manual_minus_soh",
-            )
-
-        return manual_capacity, "battery_capacity_manual"
-
-    def _update_from_data(self):
-        raw_rm = _safe_float(self._get_value("bms_rm"), 0)
-        soc = _safe_float(self._get_value("battery_soc"), 0)
-
-        if raw_rm is not None and raw_rm > 0:
-            self._attr_native_value = round(raw_rm, 1)
-            self._attr_extra_state_attributes = {
-                "source": "bms_rm",
-                "raw_bms_rm_ah": round(raw_rm, 1),
-                "fallback_used": False,
-            }
-            return
-
-        fcc, fcc_source = self._effective_fcc()
-
-        if soc is None:
-            self._attr_native_value = None
-            self._attr_extra_state_attributes = {
-                "source": "unavailable",
-                "reason": "battery_soc_unavailable",
-                "fallback_used": True,
-            }
-            return
-
-        soc = _clamp(float(soc), 0, 100)
-        fake_rm = fcc * soc / 100
-
-        self._attr_native_value = round(fake_rm, 1)
-        self._attr_extra_state_attributes = {
-            "source": "calculated_from_fcc_and_soc",
-            "fcc_source": fcc_source,
-            "effective_fcc_ah": round(fcc, 1),
-            "battery_soc_percent": round(soc, 1),
-            "raw_bms_rm_ah": raw_rm,
-            "fallback_used": True,
-        }
-
-
-
 class EnergySensor(BaseSandiSensor):
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_device_class = SensorDeviceClass.ENERGY
@@ -586,7 +468,7 @@ class BatteryPowerSensor(BaseSandiSensor):
 
 
 class TimedAveragePowerSensor(BaseSandiSensor):
-    """Virtual average power sensor sampled once per minute."""
+    """Virtual smoothed power sensor using EMA filter."""
 
     _attr_native_unit_of_measurement = UnitOfPower.WATT
     _attr_device_class = SensorDeviceClass.POWER
@@ -599,17 +481,18 @@ class TimedAveragePowerSensor(BaseSandiSensor):
         name,
         source,
         icon,
-        sample_interval_seconds=AVG_SAMPLE_INTERVAL_SECONDS,
-        sample_count=AVG_SAMPLE_COUNT,
+        alpha=0.30,
+        spike_limit_w=1500,
     ):
         super().__init__(coordinator, key, name)
 
         self._source = source
         self._attr_icon = icon
-        self._sample_interval_seconds = sample_interval_seconds
-        self._sample_count = sample_count
-        self._samples = deque(maxlen=sample_count)
-        self._last_sample_time = None
+        self._alpha = alpha
+        self._spike_limit_w = spike_limit_w
+        self._ema_value = None
+        self._last_raw_value = None
+        self._samples = 0
 
     def _source_value(self):
         if self._source == "pv":
@@ -632,49 +515,52 @@ class TimedAveragePowerSensor(BaseSandiSensor):
 
         return None
 
-    def _maybe_add_sample(self, value, now):
-        if value is None:
-            return
-
-        if self._last_sample_time is None:
-            self._samples.append(float(value))
-            self._last_sample_time = now
-            return
-
-        elapsed = (now - self._last_sample_time).total_seconds()
-
-        if elapsed >= self._sample_interval_seconds:
-            self._samples.append(float(value))
-            self._last_sample_time = now
-
     def _update_from_data(self):
-        now = dt_util.utcnow()
-        value = self._source_value()
+        raw_value = self._source_value()
 
-        self._maybe_add_sample(value, now)
-
-        if not self._samples:
+        if raw_value is None:
             self._attr_native_value = None
             return
 
-        avg = sum(self._samples) / len(self._samples)
-        self._attr_native_value = int(round(avg))
+        raw_value = float(raw_value)
+
+        if self._ema_value is None:
+            self._ema_value = raw_value
+            self._last_raw_value = raw_value
+            self._samples = 1
+        else:
+            value_for_filter = raw_value
+
+            # Limit one-shot jumps so short spikes or communication noise do not
+            # throw the filtered value too far away from reality.
+            if (
+                self._last_raw_value is not None
+                and self._spike_limit_w is not None
+                and abs(raw_value - self._last_raw_value) > self._spike_limit_w
+            ):
+                if raw_value > self._last_raw_value:
+                    value_for_filter = self._last_raw_value + self._spike_limit_w
+                else:
+                    value_for_filter = self._last_raw_value - self._spike_limit_w
+
+            self._ema_value = (
+                self._ema_value
+                + self._alpha * (value_for_filter - self._ema_value)
+            )
+
+            self._last_raw_value = raw_value
+            self._samples += 1
+
+        self._attr_native_value = int(round(self._ema_value))
 
         self._attr_extra_state_attributes = {
             "source": self._source,
-            "samples": len(self._samples),
-            "max_samples": self._sample_count,
-            "sample_interval_seconds": self._sample_interval_seconds,
-            "window_minutes": round(
-                len(self._samples) * self._sample_interval_seconds / 60,
-                1,
-            ),
-            "instant_value": None if value is None else round(float(value), 1),
-            "last_sample_time": (
-                self._last_sample_time.isoformat()
-                if self._last_sample_time is not None
-                else None
-            ),
+            "filter": "ema",
+            "alpha": self._alpha,
+            "samples": self._samples,
+            "instant_value": round(raw_value, 1),
+            "filtered_value": round(self._ema_value, 1),
+            "spike_limit_w": self._spike_limit_w,
         }
 
 
@@ -710,21 +596,14 @@ class BatteryPowerSpeedSensor(BaseSandiSensor):
         return float(charge) - float(discharge)
 
     def _battery_capacity_ah(self):
-        fcc = _safe_float(self._get_value("bms_fcc"), 0)
+        fcc = _safe_float(self._get_value("bms_fcc"))
         manual = self._get_cached_holding("battery_capacity_manual")
-        rm = _safe_float(self._get_value("bms_rm"), 0)
-        soh = _safe_float(self._get_value("bms_soh"), 0)
+        rm = _safe_float(self._get_value("bms_rm"))
 
         if fcc is not None and fcc > 0:
             return fcc, "bms_fcc"
 
         if manual is not None and manual > 0:
-            if soh is not None and soh > 0:
-                return (
-                    manual * soh / 100,
-                    "battery_capacity_manual_minus_soh",
-                )
-
             return manual, "battery_capacity_manual"
 
         if rm is not None and rm > 0:
@@ -965,21 +844,14 @@ class BatteryChargeEtaSensor(BaseSandiSensor):
         return _clamp(float(target), 1, 100)
 
     def _battery_capacity_ah(self):
-        fcc = _safe_float(self._get_value("bms_fcc"), 0)
+        fcc = _safe_float(self._get_value("bms_fcc"))
         manual = self._get_cached_holding("battery_capacity_manual")
-        rm = _safe_float(self._get_value("bms_rm"), 0)
-        soh = _safe_float(self._get_value("bms_soh"), 0)
+        rm = _safe_float(self._get_value("bms_rm"))
 
         if fcc is not None and fcc > 0:
             return fcc, "bms_fcc"
 
         if manual is not None and manual > 0:
-            if soh is not None and soh > 0:
-                return (
-                    manual * soh / 100,
-                    "battery_capacity_manual_minus_soh",
-                )
-
             return manual, "battery_capacity_manual"
 
         if rm is not None and rm > 0:
@@ -1389,7 +1261,15 @@ async def async_setup_entry(hass, entry, async_add_entities):
         SimpleSensor(coordinator, "pv_power_total", "PV Total Power",
                      UnitOfPower.WATT, SensorDeviceClass.POWER, "mdi:solar-power", 0),
 
-        TimedAveragePowerSensor(coordinator, "avg_pv_power", "AVG PV Power", "pv", "mdi:solar-power"),
+        TimedAveragePowerSensor(
+            coordinator,
+            "avg_pv_power",
+            "AVG PV Power",
+            "pv",
+            "mdi:solar-power",
+            alpha=0.25,
+            spike_limit_w=2000,
+        ),
 
         EnergySensor(coordinator, "pv_energy_today", "PV Energy Today", "mdi:solar-power"),
         EnergySensor(coordinator, "pv_energy_total", "PV Energy Total", "mdi:solar-power"),
@@ -1405,10 +1285,23 @@ async def async_setup_entry(hass, entry, async_add_entities):
                      UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT, "mdi:current-dc", 2),
 
         BatteryPowerSensor(coordinator, "battery_power", "Battery Power"),
-        TimedAveragePowerSensor(coordinator, "avg_battery_power", "AVG Battery Power", "battery", "mdi:battery-sync"),
+        TimedAveragePowerSensor(
+            coordinator,
+            "avg_battery_power",
+            "AVG Battery Power",
+            "battery",
+            "mdi:battery-sync",
+            alpha=0.25,
+            spike_limit_w=1500,
+        ),
         BatteryPowerSpeedSensor(coordinator, "avg_battery_power_speed", "AVG Battery Power Speed"),
         BatterySocSpeedSensor(coordinator, "battery_soc_speed", "Battery SOC Speed"),
         BatteryChargeEtaSensor(coordinator, "battery_charge_eta", "Battery Charge ETA"),
+        BatteryChargeEtaMinutesSensor(
+            coordinator,
+            "battery_charge_eta_minutes",
+            "Battery Charge ETA Minutes",
+        ),
 
         SimpleSensor(coordinator, "inv_temp", "Inverter Base Temperature",
                      UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE, "mdi:thermometer", 1),
@@ -1423,8 +1316,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
                      UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT, "mdi:battery-plus", 1),
         SimpleSensor(coordinator, "bms_max_discharge_current", "Battery Max Discharge Current",
                      UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT, "mdi:battery-minus", 1),
-        BatteryFccSensor(coordinator, "bms_fcc", "Battery FCC"),
-        BatteryRmSensor(coordinator, "bms_rm", "Battery RM"),
+        SimpleSensor(coordinator, "bms_fcc", "Battery FCC", "Ah", None, "mdi:battery-heart", 1),
+        SimpleSensor(coordinator, "bms_rm", "Battery RM", "Ah", None, "mdi:battery-clock", 1),
         SimpleSensor(coordinator, "bms_cycle_count", "Battery Cycle Count", None, None, "mdi:counter", 0),
         SimpleSensor(coordinator, "bms_soh", "Battery SOH", PERCENTAGE, None, "mdi:battery-check", 0),
 
@@ -1441,7 +1334,15 @@ async def async_setup_entry(hass, entry, async_add_entities):
                      UnitOfFrequency.HERTZ, SensorDeviceClass.FREQUENCY, "mdi:sine-wave", 2),
         SimpleSensor(coordinator, "grid_power", "Grid Power",
                      UnitOfPower.WATT, SensorDeviceClass.POWER, "mdi:transmission-tower", 0),
-        TimedAveragePowerSensor(coordinator, "avg_grid_power", "AVG Grid Power", "grid", "mdi:transmission-tower"),
+        TimedAveragePowerSensor(
+            coordinator,
+            "avg_grid_power",
+            "AVG Grid Power",
+            "grid",
+            "mdi:transmission-tower",
+            alpha=0.35,
+            spike_limit_w=1500,
+        ),
 
         EnergySensor(coordinator, "grid_in_energy_today", "Grid Import Energy Today", "mdi:transmission-tower-import"),
         EnergySensor(coordinator, "grid_in_energy_total", "Grid Import Energy Total", "mdi:transmission-tower-import"),
@@ -1462,7 +1363,15 @@ async def async_setup_entry(hass, entry, async_add_entities):
                      UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT, "mdi:home-lightning-bolt", 1),
         SimpleSensor(coordinator, "eps_power", "EPS Power",
                      UnitOfPower.WATT, SensorDeviceClass.POWER, "mdi:home-lightning-bolt", 0),
-        TimedAveragePowerSensor(coordinator, "avg_eps_load", "AVG EPS Load", "eps", "mdi:home-lightning-bolt"),
+        TimedAveragePowerSensor(
+            coordinator,
+            "avg_eps_load",
+            "AVG EPS Load",
+            "eps",
+            "mdi:home-lightning-bolt",
+            alpha=0.30,
+            spike_limit_w=1500,
+        ),
         EpsEnergyHourSensor(coordinator, "eps_energy_hour", "EPS Energy Hour"),
         SimpleSensor(coordinator, "eps_active_power", "EPS Active Power",
                      UnitOfPower.WATT, SensorDeviceClass.POWER, "mdi:flash", 0),

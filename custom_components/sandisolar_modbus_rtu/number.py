@@ -120,7 +120,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
             "ac_charge_current_limit",
             "Battery AC Charge Current Limit",
             UnitOfElectricCurrent.AMPERE,
-            10,
+            1,
             100,
             0.1,
             "mdi:current-ac",

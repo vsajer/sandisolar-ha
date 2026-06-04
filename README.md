@@ -286,14 +286,6 @@ This makes the integration suitable for:
 
 ![Device page](docs/images/2.png)
 
-### Battery and calculated sensors
-
-![Battery and calculated sensors](docs/images/3.png)
-
-### Configuration and controls
-
-![Configuration and controls](docs/images/4.png)
-
 ### RS485 / CAN port
 
 ![RS485 CAN port](docs/images/Port_RS485_CAN.png)

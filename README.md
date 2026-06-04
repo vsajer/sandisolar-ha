@@ -5,7 +5,7 @@ Hybridní měnič **SANDISOLAR SD-PRO-EU** konečně pořádně v Home Assistant
 <img width="250" height="250" alt="SandiSolar_HA" src="https://github.com/vsajer/sandisolar-ha/blob/main/custom_components/sandisolar_modbus_rtu/brand/logo.png" />
 
 [![HACS](https://img.shields.io/badge/HACS-Custom-blue.svg)](https://github.com/hacs/integration)
-[![Version](https://img.shields.io/github/v/release/vsajer/sandisolar-ha)](https://github.com/vsajer/sandisolar-ha/releases)
+[![Integration version](https://img.shields.io/badge/dynamic/json?label=version\&query=%24.version\&url=https%3A%2F%2Fraw.githubusercontent.com%2Fvsajer%2Fsandisolar-ha%2Fmain%2Fcustom_components%2Fsandisolar_modbus_rtu%2Fmanifest.json)](https://github.com/vsajer/sandisolar-ha/blob/main/custom_components/sandisolar_modbus_rtu/manifest.json)
 [![License](https://img.shields.io/github/license/vsajer/sandisolar-ha)](https://github.com/vsajer/sandisolar-ha/blob/main/LICENSE)
 
 Native Home Assistant integration for the **SANDISOLAR SD-PRO-EU Hybrid Inverter** using **Modbus RTU over RS485**.
@@ -39,6 +39,8 @@ Monitor solar production, battery state, grid import/export, EPS backup output, 
 * EPS active power
 * EPS apparent power
 
+---
+
 ### 🌡️ Inverter Temperatures
 
 * Inverter Base Temperature
@@ -47,6 +49,8 @@ Monitor solar production, battery state, grid import/export, EPS backup output, 
 * Inverter Ambient Temperature
 
 Useful for checking inverter cooling, fan behavior, heat buildup and installation conditions.
+
+---
 
 ### 🔋 Battery & BMS Information
 
@@ -63,23 +67,66 @@ Useful for checking inverter cooling, fan behavior, heat buildup and installatio
 * Battery max discharge current
 * Manual battery capacity setting for calculations
 
+#### Battery FCC / RM fallback logic
+
+Some BMS systems do not report **FCC** or **RM** values over Modbus. This integration can calculate fallback values automatically.
+
+**Battery FCC**
+If BMS FCC is available, the real BMS value is used.
+
+If BMS FCC is `0`, the integration calculates:
+
+```text
+Battery FCC = Battery Capacity Manual × Battery SOH / 100
+```
+
+If Battery SOH is not available, it uses:
+
+```text
+Battery FCC = Battery Capacity Manual
+```
+
+**Battery RM**
+If BMS RM is available, the real BMS value is used.
+
+If BMS RM is `0`, the integration calculates:
+
+```text
+Battery RM = Battery FCC × Battery SOC / 100
+```
+
+This makes calculated battery sensors usable even when the inverter or BMS does not expose full battery capacity data.
+
+---
+
 ### 🧮 Virtual / Calculated Sensors
 
-The integration includes additional calculated sensors for better energy overview:
+The integration includes additional calculated sensors for better energy overview and more stable automations:
 
 * AVG PV Power
 * AVG Battery Power
 
   * positive value = battery charging
   * negative value = battery discharging
-* AVG Battery Power Speed
+* AVG Grid Power
 * AVG EPS Load
+* AVG Battery Power Speed
 * Battery SOC Speed
 * Battery Charge ETA
 * EPS Energy Hour
 * Battery SOC Real
 
 Average values are sampled over time to avoid jumping values and make automations more stable.
+
+These sensors are useful for:
+
+* PV surplus control
+* boiler / water heater automation
+* battery-aware load control
+* Home Assistant dashboards
+* EMHASS or other energy optimization logic
+
+---
 
 ### ⏱️ Battery Charge ETA
 
@@ -93,6 +140,8 @@ Possible states:
 
 The ETA uses hysteresis after reaching the target SOC, so it does not start showing nonsense when the inverter slightly discharges the battery after reaching the charge target.
 
+---
+
 ### ⚡ Energy Counters
 
 * PV Energy Today / Total
@@ -105,6 +154,8 @@ The ETA uses hysteresis after reaching the target SOC, so it does not start show
 * Energy Bought Today / Total
 * Self To Load Energy Today / Total
 
+---
+
 ### ⚙️ Control Functions
 
 * Inverter Power
@@ -115,6 +166,8 @@ The ETA uses hysteresis after reaching the target SOC, so it does not start show
 * Generator Charging
 * Beeper
 * Bluetooth
+
+---
 
 ### 🎛️ Configuration Parameters
 
@@ -127,6 +180,7 @@ The ETA uses hysteresis after reaching the target SOC, so it does not start show
 * Battery Off-Grid Recovery SOC
 * Battery AC Charge Current Limit
 * Battery Capacity Manual
+* Battery Capacity Manual fallback for FCC / RM calculations
 * SecEPS ON SOC
 * SecEPS SWITCH SOC
 * SecEPS ON PV Power Min
@@ -136,6 +190,8 @@ The ETA uses hysteresis after reaching the target SOC, so it does not start show
 * AC Input Type / advanced mode
 
 Number entities use direct numeric input instead of sliders, because precise settings deserve better than “drag and pray”.
+
+---
 
 ### 🧰 Advanced / Diagnostic Entities
 
@@ -154,6 +210,8 @@ Some potentially risky or rarely used options are marked as advanced/config enti
 
 These are intentionally separated from normal controls.
 
+---
+
 ### 🚨 Diagnostics
 
 * Inverter Status
@@ -165,8 +223,55 @@ These are intentionally separated from normal controls.
 * Warning Sub Text
 * Total Work Time
 * Raw / unknown select value handling
+* Multi-language status, warning and fault texts
 
 The integration can show unknown raw values for select entities instead of silently hiding them, which helps with firmware differences and undocumented Modbus behavior.
+
+---
+
+### 🌍 Multi-language Status Texts
+
+The integration supports translated state, warning and fault texts through Home Assistant language settings.
+
+Currently included languages:
+
+* English
+* Czech
+* German
+* Polish
+* Slovak
+
+Translated values are available for:
+
+* Inverter Status
+* Battery Status
+* Fault Code Decoder
+* Warning Main Text
+* Warning Sub Text
+
+If the selected Home Assistant language is not available, English is used as fallback.
+
+---
+
+### ⚡ Energy Optimization Ready
+
+The integration exposes averaged and calculated values that can be used for PV surplus automation and energy optimization:
+
+* AVG PV Power
+* AVG Battery Power
+* AVG Grid Power
+* AVG EPS Load
+* Battery SOC Real
+* Battery Charge ETA
+* Battery Capacity Manual
+
+This makes the integration suitable for:
+
+* boiler / water heater surplus control
+* battery protection logic
+* off-grid optimization
+* PV self-consumption maximization
+* EMHASS-based planning
 
 ---
 
@@ -271,13 +376,65 @@ The inverter firmware and Modbus register map may differ between models and firm
 
 ## 🛠️ Notes
 
-This integration is still evolving. Some advanced functions are based on observed inverter behavior and available Modbus documentation. If your inverter returns different values, please open an issue and include:
+This integration is still evolving. Some advanced functions are based on observed inverter behavior and available Modbus documentation.
+
+If your inverter returns different values, please open an issue and include:
 
 * inverter model
 * firmware version
 * Modbus protocol version, if known
 * relevant Home Assistant logs
 * raw register values, if available
+
+---
+
+## 🧪 Development / Validation
+
+This repository can be validated with:
+
+* Home Assistant `hassfest`
+* HACS validation
+
+Recommended workflow file:
+
+```yaml
+name: Validate Home Assistant Integration
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  hassfest:
+    name: Hassfest
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run hassfest
+        uses: home-assistant/actions/hassfest@master
+
+  hacs:
+    name: HACS
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: HACS validation
+        uses: hacs/action@main
+        with:
+          category: integration
+```
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License.
 
 ---
 

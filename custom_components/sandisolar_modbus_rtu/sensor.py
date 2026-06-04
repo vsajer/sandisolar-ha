@@ -1000,6 +1000,237 @@ class BatteryChargeEtaSensor(BaseSandiSensor):
         }
 
 
+class BatteryChargeEtaMinutesSensor(BaseSandiSensor):
+    """Virtual numeric countdown sensor until End of Charge SOC is reached."""
+
+    _attr_native_unit_of_measurement = UnitOfTime.MINUTES
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:timer-sand"
+
+    def __init__(
+        self,
+        coordinator,
+        key,
+        name,
+        sample_interval_seconds=AVG_SAMPLE_INTERVAL_SECONDS,
+        sample_count=AVG_SAMPLE_COUNT,
+    ):
+        super().__init__(coordinator, key, name)
+
+        self._sample_interval_seconds = sample_interval_seconds
+        self._sample_count = sample_count
+        self._samples = deque(maxlen=sample_count)
+        self._last_sample_time = None
+        self._charged_at = None
+        self._charged_date = None
+
+    def _target_soc(self):
+        target = self._get_cached_holding(
+            "end_of_charge_soc",
+            DEFAULT_END_OF_CHARGE_SOC,
+        )
+
+        if target is None:
+            return DEFAULT_END_OF_CHARGE_SOC
+
+        return _clamp(float(target), 1, 100)
+
+    def _battery_capacity_ah(self):
+        fcc = _safe_float(self._get_value("bms_fcc"), 0)
+        manual = self._get_cached_holding("battery_capacity_manual")
+        rm = _safe_float(self._get_value("bms_rm"), 0)
+        soh = _safe_float(self._get_value("bms_soh"), 0)
+
+        if fcc is not None and fcc > 0:
+            return fcc, "bms_fcc"
+
+        if manual is not None and manual > 0:
+            if soh is not None and soh > 0:
+                return (
+                    manual * soh / 100,
+                    "battery_capacity_manual_minus_soh",
+                )
+
+            return manual, "battery_capacity_manual"
+
+        if rm is not None and rm > 0:
+            return rm, "bms_rm"
+
+        return DEFAULT_BATTERY_CAPACITY_AH, "default"
+
+    def _battery_net_power(self):
+        charge = self._get_value("battery_charge_power")
+        discharge = self._get_value("battery_discharge_power")
+
+        if charge is None or discharge is None:
+            return None
+
+        return float(charge) - float(discharge)
+
+    def _maybe_add_sample(self, value, now):
+        if value is None:
+            return
+
+        if self._last_sample_time is None:
+            self._samples.append(float(value))
+            self._last_sample_time = now
+            return
+
+        elapsed = (now - self._last_sample_time).total_seconds()
+
+        if elapsed >= self._sample_interval_seconds:
+            self._samples.append(float(value))
+            self._last_sample_time = now
+
+    def _battery_power_speed(self):
+        voltage = _safe_float(self._get_value("battery_voltage"))
+        capacity_ah, capacity_source = self._battery_capacity_ah()
+
+        if not self._samples or voltage is None or voltage <= 0 or capacity_ah <= 0:
+            return None, capacity_ah, capacity_source, None
+
+        avg_power = sum(self._samples) / len(self._samples)
+        ah_per_hour = avg_power / voltage
+        percent_per_hour = (ah_per_hour / capacity_ah) * 100
+
+        return percent_per_hour, capacity_ah, capacity_source, avg_power
+
+    def _update_from_data(self):
+        now_utc = dt_util.utcnow()
+        now_local = dt_util.now()
+
+        soc = _safe_float(self._get_value("battery_soc"))
+        target = self._target_soc()
+        battery_power = self._battery_net_power()
+
+        self._maybe_add_sample(battery_power, now_utc)
+
+        if soc is None:
+            self._attr_native_value = None
+            self._attr_extra_state_attributes = {
+                "status": "battery_soc_unavailable",
+            }
+            return
+
+        soc = float(soc)
+        today = now_local.date()
+
+        if self._charged_date is not None and self._charged_date != today:
+            self._charged_at = None
+            self._charged_date = None
+
+        if soc >= target:
+            if self._charged_at is None:
+                self._charged_at = now_local
+                self._charged_date = today
+
+            self._attr_native_value = 0
+            self._attr_extra_state_attributes = {
+                "status": "charged",
+                "target_soc": round(target, 1),
+                "current_soc": round(soc, 1),
+                "charged_at": self._charged_at.isoformat(),
+                "latched": True,
+            }
+            return
+
+        if (
+            self._charged_at is not None
+            and soc >= target - CHARGE_ETA_HYSTERESIS
+        ):
+            self._attr_native_value = 0
+            self._attr_extra_state_attributes = {
+                "status": "charged_latched",
+                "target_soc": round(target, 1),
+                "current_soc": round(soc, 1),
+                "charged_at": self._charged_at.isoformat(),
+                "latched": True,
+                "hysteresis_percent": CHARGE_ETA_HYSTERESIS,
+            }
+            return
+
+        if soc < target - CHARGE_ETA_HYSTERESIS:
+            self._charged_at = None
+            self._charged_date = None
+
+        speed, capacity_ah, capacity_source, avg_power = self._battery_power_speed()
+
+        if speed is None:
+            self._attr_native_value = None
+            self._attr_extra_state_attributes = {
+                "status": "waiting_for_calculation",
+                "target_soc": round(target, 1),
+                "current_soc": round(soc, 1),
+                "samples": len(self._samples),
+                "max_samples": self._sample_count,
+            }
+            return
+
+        if speed <= 0:
+            self._attr_native_value = None
+            self._attr_extra_state_attributes = {
+                "status": "not_charging",
+                "target_soc": round(target, 1),
+                "current_soc": round(soc, 1),
+                "speed_percent_per_hour": round(speed, 2),
+                "average_battery_power_w": (
+                    None if avg_power is None else round(avg_power, 1)
+                ),
+                "battery_capacity_ah": round(capacity_ah, 1),
+                "battery_capacity_source": capacity_source,
+            }
+            return
+
+        remaining = max(0, target - soc)
+        hours = remaining / speed
+
+        if hours > CHARGE_ETA_MAX_HOURS:
+            self._attr_native_value = None
+            self._attr_extra_state_attributes = {
+                "status": "not_today",
+                "target_soc": round(target, 1),
+                "current_soc": round(soc, 1),
+                "remaining_percent": round(remaining, 1),
+                "speed_percent_per_hour": round(speed, 2),
+                "estimated_hours": round(hours, 2),
+                "max_hours": CHARGE_ETA_MAX_HOURS,
+                "average_battery_power_w": (
+                    None if avg_power is None else round(avg_power, 1)
+                ),
+                "battery_capacity_ah": round(capacity_ah, 1),
+                "battery_capacity_source": capacity_source,
+                "samples": len(self._samples),
+                "max_samples": self._sample_count,
+            }
+            return
+
+        minutes = int(round(hours * 60))
+
+        if remaining > 0 and minutes < 1:
+            minutes = 1
+
+        finish = now_local + timedelta(minutes=minutes)
+
+        self._attr_native_value = minutes
+        self._attr_extra_state_attributes = {
+            "status": "ok",
+            "target_soc": round(target, 1),
+            "current_soc": round(soc, 1),
+            "remaining_percent": round(remaining, 1),
+            "speed_percent_per_hour": round(speed, 2),
+            "estimated_hours": round(hours, 2),
+            "estimated_finish_time": finish.isoformat(),
+            "average_battery_power_w": (
+                None if avg_power is None else round(avg_power, 1)
+            ),
+            "battery_capacity_ah": round(capacity_ah, 1),
+            "battery_capacity_source": capacity_source,
+            "samples": len(self._samples),
+            "max_samples": self._sample_count,
+        }
+
+
 class BatterySocRealSensor(BaseSandiSensor):
     """Virtual sensor showing usable SOC between discharge limit and EOC."""
 

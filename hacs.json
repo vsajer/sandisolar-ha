@@ -1,7 +1,7 @@
 {
   "domain": "sandisolar_modbus_rtu",
   "name": "SANDISOLAR SD-PRO-EU Modbus RTU",
-  "version": "7.1",
+  "version": "7",
   "config_flow": true,
   "documentation": "https://github.com/vsajer/sandisolar-ha",
   "issue_tracker": "https://github.com/vsajer/sandisolar-ha/issues",

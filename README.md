@@ -388,50 +388,6 @@ If your inverter returns different values, please open an issue and include:
 
 ---
 
-## 🧪 Development / Validation
-
-This repository can be validated with:
-
-* Home Assistant `hassfest`
-* HACS validation
-
-Recommended workflow file:
-
-```yaml
-name: Validate Home Assistant Integration
-
-on:
-  push:
-  pull_request:
-
-jobs:
-  hassfest:
-    name: Hassfest
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Run hassfest
-        uses: home-assistant/actions/hassfest@master
-
-  hacs:
-    name: HACS
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: HACS validation
-        uses: hacs/action@main
-        with:
-          category: integration
-```
-
----
-
 ## 📄 License
 
 This project is licensed under the MIT License.

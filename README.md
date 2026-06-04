@@ -134,9 +134,9 @@ The integration can estimate when the battery will reach the configured **Batter
 
 Possible states:
 
-* `Bude nabito v 14:35`
-* `dnes nebude`
-* `Bylo nabito v 13:02`
+* `Will be full at 14:35`
+* `Not today`
+* `Was full at 13:02`
 
 The ETA uses hysteresis after reaching the target SOC, so it does not start showing nonsense when the inverter slightly discharges the battery after reaching the charge target.
 
@@ -248,6 +248,7 @@ Translated values are available for:
 * Fault Code Decoder
 * Warning Main Text
 * Warning Sub Text
+* Battery Charge ETA texts
 
 If the selected Home Assistant language is not available, English is used as fallback.
 
@@ -275,7 +276,48 @@ This makes the integration suitable for:
 
 ---
 
-## 🖼️ Home Assistant Example
+## 🖼️ Screenshots
+
+### Dashboard overview
+
+![Dashboard overview](docs/images/1.png)
+
+### Device page
+
+![Device page](docs/images/2.png)
+
+### Battery and calculated sensors
+
+![Battery and calculated sensors](docs/images/3.png)
+
+### Configuration and controls
+
+![Configuration and controls](docs/images/4.png)
+
+### RS485 / CAN port
+
+![RS485 CAN port](docs/images/Port_RS485_CAN.png)
+
+### USB-RS485 adapter
+
+![USB RS485 adapter](docs/images/USB_RS485.png)
+
+---
+
+## 📋 Supported Entity Types
+
+| Platform   | Examples                                                                          |
+| ---------- | --------------------------------------------------------------------------------- |
+| Sensor     | PV power, battery SOC, grid power, EPS power, temperatures, energy counters       |
+| Number     | charge limit, discharge limit, SOC limits, battery capacity manual                |
+| Switch     | inverter power, EPS, bypass, UPS mode, AC charging, generator charging            |
+| Select     | source priority, charge priority, GEN port work mode, AC input type               |
+| Diagnostic | fault codes, warning codes, inverter status, battery status                       |
+| Calculated | AVG PV Power, AVG Battery Power, AVG Grid Power, AVG EPS Load, Battery Charge ETA |
+
+---
+
+## 🏠 Home Assistant Example
 
 Monitor and control:
 
@@ -360,6 +402,70 @@ Recommendations:
 
 > ⚠️ Modbus RTU expects one master on the bus. Running the original WiFi logger and Home Assistant RS485 adapter at the same time may cause communication conflicts depending on wiring and logger behavior.
 
+### RS485 / CAN port location
+
+![SANDISOLAR RS485 / CAN port](docs/images/Port_RS485_CAN.png)
+
+### USB-RS485 adapter example
+
+![USB RS485 adapter](docs/images/USB_RS485.png)
+
+If communication does not work, try swapping A and B on the USB-RS485 adapter side.
+RS485 naming is not always consistent between manufacturers. Because apparently that would be too easy.
+
+---
+
+## 🔋 Battery Capacity Fallback
+
+Some BMS systems do not provide FCC / RM values over Modbus.
+
+The integration can calculate fallback values using the manual battery capacity setting.
+
+If `Battery FCC` from BMS is `0`, the integration uses:
+
+```text
+Battery FCC = Battery Capacity Manual × Battery SOH / 100
+```
+
+If `Battery SOH` is not available, it uses:
+
+```text
+Battery FCC = Battery Capacity Manual
+```
+
+If `Battery RM` from BMS is `0`, the integration calculates:
+
+```text
+Battery RM = Battery FCC × Battery SOC / 100
+```
+
+This makes calculated sensors usable even with BMS systems that do not expose full battery capacity data.
+
+---
+
+## ⚡ PV Surplus and Energy Optimization
+
+The integration exposes averaged and calculated sensors that can be used for PV surplus control and energy optimization.
+
+Useful sensors:
+
+| Sensor             | Purpose                                      |
+| ------------------ | -------------------------------------------- |
+| AVG PV Power       | Smoothed solar production                    |
+| AVG Battery Power  | Positive = charging, negative = discharging  |
+| AVG Grid Power     | Smoothed grid import/export                  |
+| AVG EPS Load       | Smoothed backup / household load             |
+| Battery SOC Real   | Usable battery SOC between configured limits |
+| Battery Charge ETA | Estimated time to charge target              |
+
+These values can be used for:
+
+* water heater / boiler surplus control
+* battery-aware load automation
+* off-grid optimization
+* zero-export logic
+* EMHASS planning
+
 ---
 
 ## 🧩 Compatibility
@@ -374,7 +480,60 @@ The inverter firmware and Modbus register map may differ between models and firm
 
 ---
 
-## 🛠️ Notes
+## 🛠️ Troubleshooting
+
+### Integration does not connect
+
+Check:
+
+* correct serial port, for example `/dev/ttyUSB0`
+* correct baud rate, usually `9600`
+* correct slave ID, usually `1`
+* A/B RS485 wiring
+* USB-RS485 adapter permissions
+* only one Modbus master on the RS485 bus
+
+### Values are unavailable
+
+Try:
+
+* restarting Home Assistant
+* checking Modbus wiring
+* swapping A/B wires
+* lowering the update rate
+* disconnecting the original WiFi logger temporarily
+
+### Original inverter app stopped showing live data
+
+Some WiFi loggers and RS485 adapters may conflict if both try to access the inverter at the same time.
+
+Try:
+
+1. Disable the Home Assistant integration
+2. Disconnect the USB-RS485 adapter
+3. Restart inverter / WiFi logger
+4. Wait several minutes
+5. Check the original app again
+
+### GEN Port Work Mode shows unknown value
+
+Some firmware versions may return undocumented values for selected registers.
+
+The integration exposes raw / unknown values where possible instead of hiding them. This helps identify firmware differences and improve the Modbus map.
+
+### Battery FCC / RM shows calculated values
+
+If your BMS does not provide FCC or RM values over Modbus, the integration can calculate fallback values from:
+
+* Battery Capacity Manual
+* Battery SOH
+* Battery SOC
+
+This is expected behavior and makes the virtual battery sensors more useful.
+
+---
+
+## 📝 Notes
 
 This integration is still evolving. Some advanced functions are based on observed inverter behavior and available Modbus documentation.
 

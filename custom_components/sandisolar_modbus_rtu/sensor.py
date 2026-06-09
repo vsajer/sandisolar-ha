@@ -1157,22 +1157,26 @@ class BatteryChargeEtaMinutesSensor(BaseSandiSensor):
         speed, capacity_ah, capacity_source, avg_power = self._battery_power_speed()
 
         if speed is None:
-            self._attr_native_value = None
+            self._attr_native_value = 1440
             self._attr_extra_state_attributes = {
                 "status": "waiting_for_calculation",
                 "target_soc": round(target, 1),
                 "current_soc": round(soc, 1),
+                "minutes_until_full": 1440,
+                "fallback_reason": "calculation_not_ready",
                 "samples": len(self._samples),
                 "max_samples": self._sample_count,
             }
             return
 
         if speed <= 0:
-            self._attr_native_value = None
+            self._attr_native_value = 1440
             self._attr_extra_state_attributes = {
                 "status": "not_charging",
                 "target_soc": round(target, 1),
                 "current_soc": round(soc, 1),
+                "minutes_until_full": 1440,
+                "fallback_reason": "charging_not_available",
                 "speed_percent_per_hour": round(speed, 2),
                 "average_battery_power_w": (
                     None if avg_power is None else round(avg_power, 1)
@@ -1186,7 +1190,7 @@ class BatteryChargeEtaMinutesSensor(BaseSandiSensor):
         hours = remaining / speed
 
         if hours > CHARGE_ETA_MAX_HOURS:
-            self._attr_native_value = None
+            self._attr_native_value = 1440
             self._attr_extra_state_attributes = {
                 "status": "not_today",
                 "target_soc": round(target, 1),
@@ -1194,7 +1198,9 @@ class BatteryChargeEtaMinutesSensor(BaseSandiSensor):
                 "remaining_percent": round(remaining, 1),
                 "speed_percent_per_hour": round(speed, 2),
                 "estimated_hours": round(hours, 2),
+                "minutes_until_full": 1440,
                 "max_hours": CHARGE_ETA_MAX_HOURS,
+                "fallback_reason": "charging_too_far_away",
                 "average_battery_power_w": (
                     None if avg_power is None else round(avg_power, 1)
                 ),

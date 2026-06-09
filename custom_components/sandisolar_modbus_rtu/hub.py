@@ -3,6 +3,8 @@ import logging
 import time
 from typing import Optional, Dict, Any
 
+from homeassistant.exceptions import ConfigEntryNotReady
+
 from pymodbus.client import AsyncModbusSerialClient
 from pymodbus.exceptions import ModbusException
 
@@ -20,7 +22,16 @@ WRITE_LOCK_TIMEOUT = 5.0
 
 # Malá pauza mezi RTU požadavky.
 # RS485 není závodní sběrnice, spíš "mluv jeden po druhém".
-MIN_REQUEST_GAP = 0.08
+MIN_REQUEST_GAP = 0.12
+
+# Krátká pauza před opakováním neúspěšného požadavku.
+REQUEST_RETRY_DELAY = 0.25
+
+# Počet pokusů o připojení při startu integrace.
+CONNECT_ATTEMPTS = 3
+
+# Pauza mezi pokusy o připojení.
+CONNECT_RETRY_DELAY = 1.0
 
 
 class SandiSolarModbusHub:
@@ -41,57 +52,135 @@ class SandiSolarModbusHub:
         self._last_request_time = 0.0
 
     async def async_init(self):
-        """Initialize Modbus client."""
-        self._client = AsyncModbusSerialClient(
+        """Initialize Modbus client.
+
+        Important:
+        If the serial port is temporarily busy, raise ConfigEntryNotReady.
+        Home Assistant will retry setup later instead of marking the integration
+        as a hard failure.
+        """
+
+        # Kdyby po reloadu zůstal starý klient v objektu, nejdřív ho zavři.
+        await self.close()
+
+        last_error = None
+
+        for attempt in range(1, CONNECT_ATTEMPTS + 1):
+            try:
+                self._client = self._create_client()
+
+                connected = await self._client.connect()
+
+                if connected:
+                    # Důležité pro tvoji verzi pymodbus:
+                    # nepředávat slave= ani unit= do čtení/zápisu.
+                    self._client.unit_id = self.slave
+
+                    _LOGGER.info(
+                        "SANDISOLAR: Connected to %s, baudrate=%s, slave=%s",
+                        self.port,
+                        self.baudrate,
+                        self.slave,
+                    )
+                    return
+
+                last_error = f"connect() returned False on attempt {attempt}"
+
+            except Exception as err:
+                last_error = err
+
+                _LOGGER.warning(
+                    "SANDISOLAR: Modbus connect attempt %s/%s failed on %s: %s",
+                    attempt,
+                    CONNECT_ATTEMPTS,
+                    self.port,
+                    err,
+                )
+
+            await self._close_client_only()
+
+            if attempt < CONNECT_ATTEMPTS:
+                await asyncio.sleep(CONNECT_RETRY_DELAY)
+
+        raise ConfigEntryNotReady(
+            f"SANDISOLAR: Cannot connect to Modbus device on {self.port}: {last_error}"
+        )
+
+    def _create_client(self):
+        """Create Modbus serial client."""
+
+        return AsyncModbusSerialClient(
             port=self.port,
             baudrate=self.baudrate,
             bytesize=8,
             parity="N",
             stopbits=1,
-            timeout=2,
+            timeout=3,
+            retries=2,
         )
-
-        connected = await self._client.connect()
-
-        if not connected:
-            self._client = None
-            raise ModbusException(f"Cannot connect to Modbus device on {self.port}")
-
-        # Důležité pro tvoji verzi pymodbus:
-        # nepředávat slave= ani unit= do čtení/zápisu.
-        self._client.unit_id = self.slave
-
-        _LOGGER.info("SANDISOLAR: Connected to %s", self.port)
 
     async def close(self):
         """Close Modbus client."""
+
+        # Pokud někdo zrovna čte/zapisuje, počkáme krátce na lock.
+        locked = False
+
+        try:
+            locked = await self._acquire_lock(WRITE_LOCK_TIMEOUT)
+
+            if not locked:
+                _LOGGER.warning(
+                    "SANDISOLAR: Closing Modbus client without lock, Modbus busy"
+                )
+
+            await self._close_client_only()
+
+        finally:
+            if locked:
+                self._lock.release()
+
+    async def _close_client_only(self):
+        """Close client without acquiring lock. Caller handles locking."""
+
         if self._client is None:
             return
 
+        client = self._client
+        self._client = None
+
         try:
-            result = self._client.close()
+            result = client.close()
             if asyncio.iscoroutine(result):
                 await result
-        except Exception as err:
-            _LOGGER.warning("SANDISOLAR: Error closing Modbus client: %s", err)
 
-        self._client = None
+        except Exception as err:
+            _LOGGER.debug("SANDISOLAR: Error while closing Modbus client: %s", err)
+
+    async def _drop_connection(self, reason: str):
+        """Drop current Modbus connection after communication error."""
+
+        _LOGGER.debug("SANDISOLAR: Dropping Modbus connection: %s", reason)
+        await self._close_client_only()
 
     async def _ensure_connection(self):
         """Ensure Modbus client is connected."""
+
         if self._client is None:
-            await self.async_init()
-            return
+            self._client = self._create_client()
 
         if not getattr(self._client, "connected", False):
             connected = await self._client.connect()
-            if not connected:
-                raise ModbusException("Failed to reconnect Modbus client")
 
+            if not connected:
+                await self._drop_connection("reconnect_failed")
+                raise ModbusException(f"Failed to reconnect Modbus client on {self.port}")
+
+        # Důležité: nepředávat slave= ani unit= do konkrétních Modbus volání.
         self._client.unit_id = self.slave
 
     async def _request_gap(self):
         """Add small spacing between Modbus RTU requests."""
+
         now = time.monotonic()
         elapsed = now - self._last_request_time
 
@@ -102,6 +191,7 @@ class SandiSolarModbusHub:
 
     async def _acquire_lock(self, timeout: float) -> bool:
         """Acquire Modbus lock with timeout."""
+
         try:
             await asyncio.wait_for(self._lock.acquire(), timeout=timeout)
             return True
@@ -110,10 +200,25 @@ class SandiSolarModbusHub:
 
     def get_cached(self, key):
         """Return cached value."""
+
         return self._cache.get(key)
+
+    def _cached_or_none(self, key, reason: str):
+        """Return cached value if available, otherwise None."""
+
+        if key in self._cache:
+            _LOGGER.debug(
+                "SANDISOLAR: Returning cached value for %s, reason=%s",
+                key,
+                reason,
+            )
+            return self._cache[key]
+
+        return None
 
     async def read_input_register(self, key):
         """Read input register by key."""
+
         if key not in INPUT_REGISTERS:
             _LOGGER.error("SANDISOLAR: Unknown input register '%s'", key)
             return None
@@ -125,12 +230,9 @@ class SandiSolarModbusHub:
         locked = await self._acquire_lock(READ_LOCK_TIMEOUT)
 
         if not locked:
-            if key in self._cache:
-                _LOGGER.debug(
-                    "SANDISOLAR: Input read skipped for %s, returning cached value",
-                    key,
-                )
-                return self._cache[key]
+            cached = self._cached_or_none(key, "modbus_busy")
+            if cached is not None:
+                return cached
 
             _LOGGER.debug(
                 "SANDISOLAR: Input read skipped for %s, Modbus busy and no cache",
@@ -145,6 +247,7 @@ class SandiSolarModbusHub:
 
     async def read_holding_register(self, key):
         """Read holding register by key."""
+
         if key not in HOLDING_REGISTERS:
             _LOGGER.error("SANDISOLAR: Unknown holding register '%s'", key)
             return None
@@ -156,12 +259,9 @@ class SandiSolarModbusHub:
         locked = await self._acquire_lock(READ_LOCK_TIMEOUT)
 
         if not locked:
-            if key in self._cache:
-                _LOGGER.debug(
-                    "SANDISOLAR: Holding read skipped for %s, returning cached value",
-                    key,
-                )
-                return self._cache[key]
+            cached = self._cached_or_none(key, "modbus_busy")
+            if cached is not None:
+                return cached
 
             _LOGGER.debug(
                 "SANDISOLAR: Holding read skipped for %s, Modbus busy and no cache",
@@ -176,6 +276,7 @@ class SandiSolarModbusHub:
 
     async def write_holding_register(self, key, value):
         """Write holding register by key."""
+
         if key not in HOLDING_REGISTERS:
             _LOGGER.error("SANDISOLAR: Unknown holding register '%s'", key)
             return False
@@ -197,34 +298,24 @@ class SandiSolarModbusHub:
 
     async def _read_input_register_locked(self, key):
         """Read input register. Caller must hold lock."""
+
         reg = INPUT_REGISTERS[key]
 
-        try:
-            await self._ensure_connection()
-            await self._request_gap()
-
-            self._client.unit_id = self.slave
-
-            result = await self._client.read_input_registers(
+        result = await self._execute_with_retry(
+            action_name="Input read",
+            key=key,
+            operation=lambda: self._client.read_input_registers(
                 address=reg.address,
                 count=reg.count,
-            )
-
-        except asyncio.CancelledError:
-            _LOGGER.debug("SANDISOLAR: Input read cancelled %s", key)
-            raise
-
-        except Exception as err:
-            _LOGGER.error("SANDISOLAR: Input read error %s: %s", key, err)
-            return None
+            ),
+        )
 
         if result is None:
-            _LOGGER.error("SANDISOLAR: Input read returned None for %s", key)
-            return None
+            return self._cached_or_none(key, "input_read_failed")
 
         if result.isError():
-            _LOGGER.error("SANDISOLAR: Input read error %s: %s", key, result)
-            return None
+            _LOGGER.warning("SANDISOLAR: Input read Modbus error %s: %s", key, result)
+            return self._cached_or_none(key, "input_read_modbus_error")
 
         raw = self._decode(result.registers, reg.signed)
         value = raw * reg.scale
@@ -234,34 +325,24 @@ class SandiSolarModbusHub:
 
     async def _read_holding_register_locked(self, key):
         """Read holding register. Caller must hold lock."""
+
         reg = HOLDING_REGISTERS[key]
 
-        try:
-            await self._ensure_connection()
-            await self._request_gap()
-
-            self._client.unit_id = self.slave
-
-            result = await self._client.read_holding_registers(
+        result = await self._execute_with_retry(
+            action_name="Holding read",
+            key=key,
+            operation=lambda: self._client.read_holding_registers(
                 address=reg.address,
                 count=reg.count,
-            )
-
-        except asyncio.CancelledError:
-            _LOGGER.debug("SANDISOLAR: Holding read cancelled %s", key)
-            raise
-
-        except Exception as err:
-            _LOGGER.error("SANDISOLAR: Holding read error %s: %s", key, err)
-            return None
+            ),
+        )
 
         if result is None:
-            _LOGGER.error("SANDISOLAR: Holding read returned None for %s", key)
-            return None
+            return self._cached_or_none(key, "holding_read_failed")
 
         if result.isError():
-            _LOGGER.error("SANDISOLAR: Holding read error %s: %s", key, result)
-            return None
+            _LOGGER.warning("SANDISOLAR: Holding read Modbus error %s: %s", key, result)
+            return self._cached_or_none(key, "holding_read_modbus_error")
 
         raw = self._decode(result.registers, reg.signed)
         value = raw * reg.scale
@@ -271,41 +352,104 @@ class SandiSolarModbusHub:
 
     async def _write_holding_register_locked(self, key, value):
         """Write holding register. Caller must hold lock."""
+
         reg = HOLDING_REGISTERS[key]
         raw = int(round(value / reg.scale))
 
-        try:
-            await self._ensure_connection()
-            await self._request_gap()
-
-            self._client.unit_id = self.slave
-
-            result = await self._client.write_register(
+        result = await self._execute_with_retry(
+            action_name="Write",
+            key=f"{key}={value}",
+            operation=lambda: self._client.write_register(
                 address=reg.address,
                 value=raw,
-            )
-
-        except asyncio.CancelledError:
-            _LOGGER.debug("SANDISOLAR: Write cancelled %s=%s", key, value)
-            raise
-
-        except Exception as err:
-            _LOGGER.error("SANDISOLAR: Write error %s=%s: %s", key, value, err)
-            return False
+            ),
+        )
 
         if result is None:
-            _LOGGER.error("SANDISOLAR: Write returned None for %s=%s", key, value)
+            _LOGGER.warning("SANDISOLAR: Write failed %s=%s", key, value)
             return False
 
         if result.isError():
-            _LOGGER.error("SANDISOLAR: Write error %s=%s: %s", key, value, result)
+            _LOGGER.warning("SANDISOLAR: Write Modbus error %s=%s: %s", key, value, result)
             return False
 
         self._cache[key] = value
         return True
 
+    async def _execute_with_retry(self, action_name: str, key: str, operation):
+        """Execute one Modbus operation with one retry on transient failures."""
+
+        for attempt in range(1, 3):
+            try:
+                await self._ensure_connection()
+                await self._request_gap()
+
+                # Důležité: unit_id nastavit na klientovi.
+                # Nepředávat slave= ani unit= do Modbus metod.
+                self._client.unit_id = self.slave
+
+                result = await operation()
+
+                if result is None:
+                    _LOGGER.debug(
+                        "SANDISOLAR: %s returned None for %s, attempt %s/2",
+                        action_name,
+                        key,
+                        attempt,
+                    )
+
+                    if attempt == 1:
+                        await asyncio.sleep(REQUEST_RETRY_DELAY)
+                        continue
+
+                return result
+
+            except asyncio.CancelledError:
+                _LOGGER.debug("SANDISOLAR: %s cancelled %s", action_name, key)
+                raise
+
+            except Exception as err:
+                err_text = str(err)
+
+                transient = (
+                    "Request cancelled outside pymodbus" in err_text
+                    or "temporarily unavailable" in err_text.lower()
+                    or "resource temporarily unavailable" in err_text.lower()
+                    or "device reports readiness to read but returned no data" in err_text.lower()
+                    or "no response received" in err_text.lower()
+                    or "failed to reconnect" in err_text.lower()
+                )
+
+                if transient:
+                    _LOGGER.debug(
+                        "SANDISOLAR: %s transient error %s, attempt %s/2: %s",
+                        action_name,
+                        key,
+                        attempt,
+                        err,
+                    )
+                else:
+                    _LOGGER.warning(
+                        "SANDISOLAR: %s error %s, attempt %s/2: %s",
+                        action_name,
+                        key,
+                        attempt,
+                        err,
+                    )
+
+                await self._drop_connection(f"{action_name} failed for {key}: {err}")
+
+                if attempt == 1:
+                    await asyncio.sleep(REQUEST_RETRY_DELAY)
+                    continue
+
+                return None
+
+        return None
+
     def _decode(self, registers, signed=False):
         """Decode Modbus registers."""
+
         if not registers:
             return 0
 

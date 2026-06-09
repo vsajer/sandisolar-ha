@@ -1,6 +1,6 @@
-# SANDISOLAR / SD-PRO-EU – Modbus RTU Integration for Home Assistant
+# ⚡ SANDISOLAR / SD-PRO-EU – Modbus RTU Integration for Home Assistant
 
-Hybridní měnič **SANDISOLAR SD-PRO-EU** v Home Assistantu bez cloudu — přes **Modbus RTU / RS485**.
+Hybrid inverter **SANDISOLAR SD-PRO-EU** in Home Assistant without cloud dependency, using **Modbus RTU over RS485**.
 
 <img width="250" height="250" alt="SandiSolar_HA" src="https://github.com/vsajer/sandisolar-ha/blob/main/custom_components/sandisolar_modbus_rtu/brand/logo.png" />
 
@@ -10,26 +10,26 @@ Hybridní měnič **SANDISOLAR SD-PRO-EU** v Home Assistantu bez cloudu — pře
 
 Native Home Assistant integration for the **SANDISOLAR SD-PRO-EU Hybrid Inverter** using **Modbus RTU over RS485**.
 
-Umožňuje sledovat výrobu z panelů, baterii, síť, EPS výstup, teploty, výstrahy, chybové stavy a energetické čítače. Zároveň dovoluje ovládat vybrané funkce měniče přímo z Home Assistantu.
+It allows you to monitor solar production, battery state, grid data, EPS output, temperatures, warnings, fault states and energy counters. It also allows selected inverter functions to be controlled directly from Home Assistant.
 
-> ⚠️ Integrace komunikuje přímo s měničem. Pokročilé volby můžou změnit jeho chování. Neklikej na všechno jen proto, že to svítí.
+> ⚠️ This integration communicates directly with the inverter. Advanced options may change inverter behavior. Do not click every shiny button just because it exists.
 
 ---
 
-## ✨ Hlavní funkce
+## ✨ Main Features
 
 ### 📊 Monitoring
 
-- PV1 / PV2 napětí a proud
-- Celkový PV výkon
-- Baterie: napětí, proud, SOC, SOH, teplota
-- Nabíjecí / vybíjecí výkon baterie
-- Síť: napětí, proud, frekvence, import/export výkon
-- EPS: napětí, proud, aktivní a zdánlivý výkon
-- Teploty měniče: base, boost, LLC, ambient
-- Stav měniče, stav baterie, chybové a varovné kódy
+- PV1 / PV2 voltage and current
+- Total PV power
+- Battery voltage, current, SOC, SOH and temperature
+- Battery charge / discharge power
+- Grid voltage, current, frequency and import/export power
+- EPS voltage, current, active power and apparent power
+- Inverter temperatures: base, boost, LLC and ambient
+- Inverter status, battery status, fault codes and warning codes
 
-### ⚡ Energetické čítače
+### ⚡ Energy Counters
 
 - PV Energy Today / Total
 - Battery Charge / Discharge Energy Today / Total
@@ -38,12 +38,12 @@ Umožňuje sledovat výrobu z panelů, baterii, síť, EPS výstup, teploty, vý
 - Energy Sold / Bought Today / Total
 - Self To Load Energy Today / Total
 
-### 🧮 Vypočítané senzory
+### 🧮 Calculated Sensors
 
 - AVG PV Power
-- AVG Battery Power  
-  - kladná hodnota = baterie se nabíjí
-  - záporná hodnota = baterie se vybíjí
+- AVG Battery Power
+  - positive value = battery is charging
+  - negative value = battery is discharging
 - AVG Grid Power
 - AVG EPS Load
 - Battery SOC Real
@@ -52,51 +52,45 @@ Umožňuje sledovat výrobu z panelů, baterii, síť, EPS výstup, teploty, vý
 - Battery Charge ETA
 - EPS Energy Hour
 
-Průměrované hodnoty jsou vhodné pro stabilnější automatizace, řízení přebytků, bojler, EMHASS a dashboardy.
+Averaged values are useful for more stable automations, PV surplus control, water heater control, EMHASS and dashboards.
 
 ---
 
-## 🔋 Battery FCC / RM fallback
+## 🔋 Battery FCC / RM Fallback
 
-Některé BMS neposílají přes Modbus hodnoty **FCC** nebo **RM**. Integrace je umí dopočítat z ručně nastavené kapacity baterie.
+Some BMS systems do not report **FCC** or **RM** values over Modbus. This integration can calculate them from the manually configured battery capacity.
 
-```text
 Battery FCC = Battery Capacity Manual × Battery SOH / 100
-```
 
-Pokud SOH není dostupné:
+If SOH is not available:
 
-```text
 Battery FCC = Battery Capacity Manual
-```
 
-Pokud BMS neposílá RM:
+If the BMS does not report RM:
 
-```text
 Battery RM = Battery FCC × Battery SOC / 100
-```
 
-Díky tomu zůstávají bateriové výpočty použitelné i s BMS, která neposílá kompletní data.
+This keeps battery-related calculations usable even with BMS systems that do not expose complete capacity data.
 
 ---
 
 ## ⏱️ Battery Charge ETA
 
-Integrace odhaduje, kdy baterie dosáhne nastaveného **Battery End of Charge SOC**.
+The integration estimates when the battery will reach the configured **Battery End of Charge SOC**.
 
-Možné stavy:
+Possible states:
 
 - `Will be full at 14:35`
 - `Not today`
 - `Was full at 13:02`
 
-ETA používá hysteresi, takže po dosažení cílového SOC nezačne ukazovat blbosti při drobném poklesu baterie. Malá věc, velká úleva pro nervy.
+ETA uses hysteresis, so after reaching the target SOC it does not start showing nonsense when the battery slightly drops.
 
 ---
 
-## ⚙️ Ovládání a nastavení
+## ⚙️ Control and Settings
 
-### Switch
+### 🔘 Switch
 
 - Inverter Power
 - EPS Enable
@@ -107,7 +101,7 @@ ETA používá hysteresi, takže po dosažení cílového SOC nezačne ukazovat 
 - Beeper
 - Bluetooth
 
-### Number
+### 🔢 Number
 
 - Battery Charge Limit
 - Battery Discharge Limit
@@ -120,9 +114,9 @@ ETA používá hysteresi, takže po dosažení cílového SOC nezačne ukazovat 
 - SecEPS SWITCH SOC
 - SecEPS ON PV Power Min
 
-Number entity používají přímé zadání čísla místo sliderů. Přesné nastavení si zaslouží víc než „tref se palcem“.
+Number entities use direct numeric input instead of sliders. Precise settings deserve better than “drag and pray”.
 
-### Select
+### 🎛️ Select
 
 - Source Priority
 - Charge Priority
@@ -131,9 +125,9 @@ Number entity používají přímé zadání čísla místo sliderů. Přesné n
 
 ---
 
-## 🧰 Pokročilé a diagnostické entity
+## 🧰 Advanced and Diagnostic Entities
 
-Některé volby jsou označené jako pokročilé nebo diagnostické a můžou být ve výchozím stavu vypnuté:
+Some options are marked as advanced or diagnostic and may be disabled by default:
 
 - ADV - Island Mode
 - ADV - Grid Feedback
@@ -146,7 +140,7 @@ Některé volby jsou označené jako pokročilé nebo diagnostické a můžou b�
 - ADV - VFRT Enable
 - ADV - AC Input Type
 
-Diagnostika zahrnuje:
+Diagnostics include:
 
 - Inverter Status
 - Battery Status
@@ -156,15 +150,15 @@ Diagnostika zahrnuje:
 - Total Work Time
 - Raw / unknown select value handling
 
-Neznámé hodnoty se pokud možno zobrazí jako raw hodnota, aby šly lépe řešit rozdíly mezi firmware.
+Unknown values are shown as raw values where possible, making firmware differences easier to troubleshoot.
 
 ---
 
-## 🌍 Překlady
+## 🌍 Translations
 
-Integrace podporuje překlady stavů, varování a chyb podle jazyka Home Assistantu.
+The integration supports translated states, warnings and faults based on the Home Assistant language setting.
 
-Aktuálně zahrnuté jazyky:
+Currently included languages:
 
 - English
 - Czech
@@ -172,7 +166,7 @@ Aktuálně zahrnuté jazyky:
 - Polish
 - Slovak
 
-Přeložené jsou hlavně:
+Main translated values:
 
 - Inverter Status
 - Battery Status
@@ -181,25 +175,25 @@ Přeložené jsou hlavně:
 - Warning Sub Text
 - Battery Charge ETA
 
-Pokud jazyk není dostupný, použije se angličtina.
+If the selected language is not available, English is used as fallback.
 
 ---
 
 ## 🖼️ Screenshots
 
-### Dashboard overview
+### 📊 Dashboard overview
 
 ![Dashboard overview](docs/images/1.png)
 
-### Device page
+### 🧩 Device page
 
 ![Device page](docs/images/2.png)
 
-### RS485 / CAN port
+### 🔌 RS485 / CAN port
 
 ![RS485 CAN port](docs/images/Port_RS485_CAN.png)
 
-### USB-RS485 adapter
+### 🔗 USB-RS485 adapter
 
 ![USB RS485 adapter](docs/images/USB_RS485.png)
 
@@ -207,12 +201,12 @@ Pokud jazyk není dostupný, použije se angličtina.
 
 ## 📋 Supported Entity Types
 
-| Platform   | Examples |
-| ---------- | -------- |
-| Sensor     | PV power, battery SOC, grid power, EPS power, temperatures, energy counters |
-| Number     | Charge limit, discharge limit, SOC limits, battery capacity manual |
-| Switch     | Inverter power, EPS, bypass, UPS mode, AC charging, generator charging |
-| Select     | Source priority, charge priority, GEN port work mode, AC input type |
+| Platform | Examples |
+| --- | --- |
+| Sensor | PV power, battery SOC, grid power, EPS power, temperatures, energy counters |
+| Number | Charge limit, discharge limit, SOC limits, battery capacity manual |
+| Switch | Inverter power, EPS, bypass, UPS mode, AC charging, generator charging |
+| Select | Source priority, charge priority, GEN port work mode, AC input type |
 | Diagnostic | Fault codes, warnings, inverter status, battery status |
 | Calculated | AVG PV Power, AVG Battery Power, AVG Grid Power, AVG EPS Load, Battery Charge ETA |
 
@@ -223,76 +217,66 @@ Pokud jazyk není dostupný, použije se angličtina.
 1. Open **HACS**
 2. Select **Integrations**
 3. Click **⋮ → Custom repositories**
-4. Add repository:
-
-```text
-https://github.com/vsajer/sandisolar-ha
-```
-
-Category:
-
-```text
-Integration
-```
-
-5. Install the integration
-6. Restart Home Assistant
-7. Add integration in **Settings → Devices & Services → Add Integration**
-8. Select **SANDISOLAR Modbus RTU**
+4. Add repository: `https://github.com/vsajer/sandisolar-ha`
+5. Category: `Integration`
+6. Install the integration
+7. Restart Home Assistant
+8. Add the integration in **Settings → Devices & Services → Add Integration**
+9. Select **SANDISOLAR Modbus RTU**
 
 ---
 
 ## ⚙️ Configuration
 
-| Parameter       | Example        |
-| --------------- | -------------- |
-| Serial Port     | `/dev/ttyUSB0` |
-| Baud Rate       | `9600`         |
-| Slave ID        | `1`            |
-| Update Interval | `10 s`         |
+| Parameter | Example |
+| --- | --- |
+| Serial Port | `/dev/ttyUSB0` |
+| Baud Rate | `9600` |
+| Slave ID | `1` |
+| Update Interval | `10 s` |
 
 ---
 
 ## 🔌 RS485 Wiring
 
 | Inverter | USB-RS485 |
-| -------- | --------- |
-| A        | A / D+    |
-| B        | B / D-    |
+| --- | --- |
+| A | A / D+ |
+| B | B / D- |
 
-Doporučení:
+Recommendations:
 
-- použij kroucený pár
-- u delšího vedení použij stíněný kabel
-- u dlouhé RS485 linky použij zakončovací odpor 120 Ω
-- na jedné RS485 sběrnici měj jen jednoho Modbus mastera
+- use twisted pair cable
+- use shielded cable for longer cable runs
+- use a 120 Ω termination resistor on long RS485 lines
+- keep only one Modbus master on a single RS485 bus
 
-> ⚠️ Modbus RTU počítá s jedním masterem. Originální WiFi logger a Home Assistant RS485 adaptér můžou při současném provozu dělat konflikty.
+> ⚠️ Modbus RTU expects one master. The original WiFi logger and a Home Assistant RS485 adapter may cause communication conflicts if used at the same time.
 
-Pokud komunikace nefunguje, zkus prohodit A/B vodiče na USB-RS485 adaptéru. Značení RS485 je občas loterie v montérkách.
+If communication does not work, try swapping A/B wires on the USB-RS485 adapter. RS485 labeling is sometimes a lottery wearing work boots.
 
 ---
 
-## ⚡ PV přebytky a optimalizace
+## ⚡ PV Surplus and Energy Optimization
 
-Pro řízení přebytků a energetickou optimalizaci jsou nejužitečnější tyto senzory:
+The most useful sensors for PV surplus control and energy optimization are:
 
-| Sensor             | Purpose |
-| ------------------ | ------- |
-| AVG PV Power       | Vyhlazená výroba z panelů |
-| AVG Battery Power  | Kladně = nabíjení, záporně = vybíjení |
-| AVG Grid Power     | Vyhlazený import/export ze sítě |
-| AVG EPS Load       | Vyhlazená zátěž EPS / domu |
-| Battery SOC Real   | Použitelný SOC podle nastavených limitů |
-| Battery Charge ETA | Odhad času do cílového nabití |
+| Sensor | Purpose |
+| --- | --- |
+| AVG PV Power | Smoothed solar production |
+| AVG Battery Power | Positive = charging, negative = discharging |
+| AVG Grid Power | Smoothed grid import/export |
+| AVG EPS Load | Smoothed EPS / house load |
+| Battery SOC Real | Usable SOC based on configured limits |
+| Battery Charge ETA | Estimated time to target charge level |
 
-Typické použití:
+Typical use cases:
 
-- řízení bojleru podle přebytků
-- ochrana baterie
-- off-grid optimalizace
-- zero-export logika
-- EMHASS plánování
+- water heater control based on PV surplus
+- battery protection
+- off-grid optimization
+- zero-export logic
+- EMHASS planning
 
 ---
 
@@ -304,72 +288,72 @@ Tested with:
 - Modbus RTU Protocol V2.14
 - Home Assistant 2025+
 
-Firmware a Modbus mapa se můžou mezi modely lišit. Proto integrace u některých registrů zachází opatrně a u neznámých hodnot se snaží ukázat raw data.
+Firmware and Modbus maps may differ between models. For this reason, the integration handles some registers carefully and tries to expose raw values for unknown states.
 
 ---
 
 ## 🛠️ Troubleshooting
 
-### Integration does not connect
+### ❌ Integration does not connect
 
-Zkontroluj:
+Check:
 
-- správný serial port, například `/dev/ttyUSB0`
-- baud rate, obvykle `9600`
-- slave ID, obvykle `1`
-- A/B zapojení RS485
-- oprávnění USB-RS485 adaptéru
-- že na RS485 sběrnici není druhý Modbus master
+- correct serial port, for example `/dev/ttyUSB0`
+- correct baud rate, usually `9600`
+- correct slave ID, usually `1`
+- RS485 A/B wiring
+- USB-RS485 adapter permissions
+- that there is no second Modbus master on the RS485 bus
 
-### Values are unavailable
+### ⚠️ Values are unavailable
 
-Zkus:
+Try:
 
-- restartovat Home Assistant
-- zkontrolovat Modbus kabeláž
-- prohodit A/B vodiče
-- snížit update interval
-- dočasně odpojit originální WiFi logger
+- restart Home Assistant
+- check Modbus wiring
+- swap A/B wires
+- lower the update interval
+- temporarily disconnect the original WiFi logger
 
-### Original inverter app stopped showing live data
+### 📱 Original inverter app stopped showing live data
 
-Originální WiFi logger a RS485 adaptér se můžou hádat o komunikaci.
+The original WiFi logger and RS485 adapter may fight over communication.
 
-Zkus:
+Try:
 
-1. Disable Home Assistant integration
-2. Disconnect USB-RS485 adapter
-3. Restart inverter / WiFi logger
+1. Disable the Home Assistant integration
+2. Disconnect the USB-RS485 adapter
+3. Restart the inverter / WiFi logger
 4. Wait several minutes
-5. Check original app again
+5. Check the original app again
 
-### GEN Port Work Mode shows unknown value
+### 🎛️ GEN Port Work Mode shows unknown value
 
-Některé firmware můžou vracet nedokumentované hodnoty. Integrace je pokud možno zobrazí jako raw / unknown, aby šly dohledat a doplnit.
+Some firmware versions may return undocumented values. The integration displays them as raw / unknown values where possible, so they can be investigated and added later.
 
-### Battery FCC / RM shows calculated values
+### 🔋 Battery FCC / RM shows calculated values
 
-Pokud BMS neposílá FCC nebo RM, integrace je dopočítá z:
+If the BMS does not report FCC or RM, the integration calculates them from:
 
 - Battery Capacity Manual
 - Battery SOH
 - Battery SOC
 
-To je očekávané chování.
+This is expected behavior.
 
 ---
 
 ## 📝 Notes
 
-Integrace se dál vyvíjí. Některé pokročilé funkce vycházejí z dostupné Modbus dokumentace a pozorovaného chování měniče.
+The integration is still evolving. Some advanced functions are based on available Modbus documentation and observed inverter behavior.
 
-Při hlášení problému přidej:
+When reporting an issue, please include:
 
-- model měniče
+- inverter model
 - firmware version
-- Modbus protocol version, pokud je známá
-- relevantní Home Assistant logy
-- raw register values, pokud jsou dostupné
+- Modbus protocol version, if known
+- relevant Home Assistant logs
+- raw register values, if available
 
 ---
 
@@ -388,12 +372,12 @@ Czech Republic 🇨🇿
 
 ## ❤️ Support
 
-Pokud ti integrace pomohla:
+If this integration helped you:
 
 - ⭐ Star the repository
-- Report issues
-- Share screenshots and test results
-- Contribute register definitions
-- Improve translations and documentation
+- 🐞 Report issues
+- 🖼️ Share screenshots and test results
+- 🧩 Contribute register definitions
+- 🌍 Improve translations and documentation
 
 Pull requests are welcome.

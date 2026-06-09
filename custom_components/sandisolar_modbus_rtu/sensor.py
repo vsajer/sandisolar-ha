@@ -1157,12 +1157,12 @@ class BatteryChargeEtaMinutesSensor(BaseSandiSensor):
         speed, capacity_ah, capacity_source, avg_power = self._battery_power_speed()
 
         if speed is None:
-            self._attr_native_value = 1440
+            self._attr_native_value = 999
             self._attr_extra_state_attributes = {
                 "status": "waiting_for_calculation",
                 "target_soc": round(target, 1),
                 "current_soc": round(soc, 1),
-                "minutes_until_full": 1440,
+                "minutes_until_full": 999,
                 "fallback_reason": "calculation_not_ready",
                 "samples": len(self._samples),
                 "max_samples": self._sample_count,
@@ -1170,12 +1170,12 @@ class BatteryChargeEtaMinutesSensor(BaseSandiSensor):
             return
 
         if speed <= 0:
-            self._attr_native_value = 1440
+            self._attr_native_value = 999
             self._attr_extra_state_attributes = {
                 "status": "not_charging",
                 "target_soc": round(target, 1),
                 "current_soc": round(soc, 1),
-                "minutes_until_full": 1440,
+                "minutes_until_full": 999,
                 "fallback_reason": "charging_not_available",
                 "speed_percent_per_hour": round(speed, 2),
                 "average_battery_power_w": (
@@ -1190,7 +1190,7 @@ class BatteryChargeEtaMinutesSensor(BaseSandiSensor):
         hours = remaining / speed
 
         if hours > CHARGE_ETA_MAX_HOURS:
-            self._attr_native_value = 1440
+            self._attr_native_value = 999
             self._attr_extra_state_attributes = {
                 "status": "not_today",
                 "target_soc": round(target, 1),
@@ -1198,7 +1198,7 @@ class BatteryChargeEtaMinutesSensor(BaseSandiSensor):
                 "remaining_percent": round(remaining, 1),
                 "speed_percent_per_hour": round(speed, 2),
                 "estimated_hours": round(hours, 2),
-                "minutes_until_full": 1440,
+                "minutes_until_full": 999,
                 "max_hours": CHARGE_ETA_MAX_HOURS,
                 "fallback_reason": "charging_too_far_away",
                 "average_battery_power_w": (
@@ -1504,8 +1504,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
             "AVG PV Power",
             "pv",
             "mdi:solar-power",
-            alpha=0.25,
-            spike_limit_w=2000,
+            alpha=0.15,
+            spike_limit_w=1000,
         ),
 
         EnergySensor(coordinator, "pv_energy_today", "PV Energy Today", "mdi:solar-power"),
@@ -1528,8 +1528,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
             "AVG Battery Power",
             "battery",
             "mdi:battery-sync",
-            alpha=0.25,
-            spike_limit_w=1500,
+            alpha=0.18,
+            spike_limit_w=1000,
         ),
         BatteryPowerSpeedSensor(coordinator, "avg_battery_power_speed", "AVG Battery Power Speed"),
         BatterySocSpeedSensor(coordinator, "battery_soc_speed", "Battery SOC Speed"),
@@ -1577,7 +1577,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
             "AVG Grid Power",
             "grid",
             "mdi:transmission-tower",
-            alpha=0.35,
+            alpha=0.25,
             spike_limit_w=1500,
         ),
 
@@ -1606,7 +1606,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
             "AVG EPS Load",
             "eps",
             "mdi:home-lightning-bolt",
-            alpha=0.30,
+            alpha=0.25,
             spike_limit_w=1500,
         ),
         EpsEnergyHourSensor(coordinator, "eps_energy_hour", "EPS Energy Hour"),

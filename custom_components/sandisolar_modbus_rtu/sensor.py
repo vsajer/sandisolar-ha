@@ -44,7 +44,7 @@ DEFAULT_END_OF_CHARGE_SOC = 98
 CHARGE_ETA_MAX_HOURS = 12
 CHARGE_ETA_HYSTERESIS = 2
 
-TRANSLATIONS_DIR = Path(__file__).parent / "translations"
+TRANSLATIONS_DIR = Path(__file__).parent / "status_translations"
 _TRANSLATION_CACHE = {}
 
 

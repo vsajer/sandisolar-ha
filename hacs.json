@@ -1,12 +1,6 @@
 {
-  "domain": "sandisolar_modbus_rtu",
   "name": "SANDISOLAR SD-PRO-EU Modbus RTU",
-  "version": "8.0",
-  "config_flow": true,
-  "documentation": "https://github.com/vsajer/sandisolar-ha",
-  "issue_tracker": "https://github.com/vsajer/sandisolar-ha/issues",
-  "codeowners": ["@vsajer"],
-  "requirements": ["pymodbus"],
-  "iot_class": "local_polling",
-  "integration_type": "hub"
+  "render_readme": true,
+  "domains": ["sensor", "switch", "number", "select"],
+  "homeassistant": "2025.5.0"
 }

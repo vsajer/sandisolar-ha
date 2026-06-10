@@ -1,0 +1,70 @@
+{
+  "states": {
+    "inverter_status": {
+      "0": "Čekání",
+      "1": "Režim sítě",
+      "2": "Ostrovní režim",
+      "3": "Porucha",
+      "4": "Aktualizace / blikání",
+      "5": "Bypass",
+      "6": "Samonabíjení"
+    },
+    "battery_status": {
+      "0": "Normální",
+      "1": "Nabíjení",
+      "2": "Vybíjení",
+      "3": "Pohotovost"
+    },
+    "fault_word0": {
+      "0": "No fault",
+      "103": "Inverter DC offset is too high",
+      "105": "Bypass AC output is overloaded",
+      "200": "Off-grid output voltage is too low",
+      "201": "Off-grid output voltage is too high",
+      "202": "Off-grid output has a short circuit",
+      "203": "Off-grid output is overloaded",
+      "204": "Abnormal off-grid output DC component offset",
+      "301": "Battery open circuit",
+      "305": "Battery overvoltage",
+      "306": "Battery overcurrent",
+      "307": "Battery communication fault",
+      "308": "BMS fault",
+      "400": "PV overvoltage",
+      "403": "PV short circuit",
+      "404": "PV reverse connection",
+      "500": "Abnormal BUS voltage",
+      "501": "Abnormal BUS voltage sampling",
+      "502": "Abnormal internal communication",
+      "505": "Temperature sensor connection fault",
+      "506": "Device over-temperature",
+      "507": "Relay fault",
+      "509": "Anti-backflow output timeout",
+      "510": "Software version mismatch",
+      "511": "Fan fault",
+      "513": "Parallel operation fault"
+    },
+    "warning_main": {
+      "0": "OK",
+      "103": "Grid unavailable",
+      "104": "Grid voltage out of range",
+      "105": "Grid frequency out of range",
+      "106": "No output voltage from generator",
+      "107": "Generator output voltage out of range",
+      "108": "Generator output frequency out of range",
+      "302": "Low battery",
+      "304": "Abnormal BMS information",
+      "305": "Low battery voltage alarm",
+      "502": "Memory read/write error"
+    },
+    "warning_sub": {
+      "0": "Bez varování"
+    },
+    "unknown": {
+      "fault_code": "Neznámý chybový kód",
+      "warning_code": "Neznámý varovný kód",
+      "sub_warning_code": "Neznámý podružný varovný kód",
+      "battery_status": "Neznámý stav BMS",
+      "inverter_status": "Neznámý stav měniče"
+    }
+  }
+}

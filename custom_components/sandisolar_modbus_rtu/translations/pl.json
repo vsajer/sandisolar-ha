@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "Konfiguracja SANDISOLAR Modbus RTU",
-        "description": "Wprowadź dane połączenia falownika SANDISOLAR.",
+        "description": "Podaj dane połączenia falownika SANDISOLAR.",
         "data": {
           "port": "Port szeregowy",
           "baudrate": "Prędkość transmisji",
@@ -36,74 +36,6 @@
     },
     "error": {
       "invalid_update_interval": "Interwał aktualizacji musi wynosić co najmniej 5 sekund."
-    }
-  },
-  "states": {
-    "inverter_status": {
-      "0": "Oczekiwanie",
-      "1": "Tryb sieciowy",
-      "2": "Tryb wyspowy",
-      "3": "Awaria",
-      "4": "Aktualizacja / flashowanie",
-      "5": "Bypass",
-      "6": "Samodzielne ładowanie"
-    },
-    "battery_status": {
-      "0": "Normalny",
-      "1": "Ładowanie",
-      "2": "Rozładowywanie",
-      "3": "Czuwanie"
-    },
-    "fault_word0": {
-      "0": "Brak awarii",
-      "103": "Zbyt wysoki offset DC falownika",
-      "105": "Przeciążenie wyjścia AC bypass",
-      "200": "Zbyt niskie napięcie wyjściowe w trybie wyspowym",
-      "201": "Zbyt wysokie napięcie wyjściowe w trybie wyspowym",
-      "202": "Zwarcie na wyjściu wyspowym",
-      "203": "Przeciążenie wyjścia wyspowego",
-      "204": "Nieprawidłowa składowa DC na wyjściu wyspowym",
-      "301": "Bateria odłączona",
-      "305": "Przepięcie baterii",
-      "306": "Nadprąd baterii",
-      "307": "Błąd komunikacji z baterią",
-      "308": "Błąd BMS",
-      "400": "Przepięcie PV",
-      "403": "Zwarcie PV",
-      "404": "Odwrócona polaryzacja PV",
-      "500": "Nieprawidłowe napięcie magistrali DC",
-      "501": "Błąd pomiaru napięcia magistrali DC",
-      "502": "Wewnętrzny błąd komunikacji",
-      "505": "Błąd podłączenia czujnika temperatury",
-      "506": "Przegrzanie urządzenia",
-      "507": "Błąd przekaźnika",
-      "509": "Przekroczony czas działania zabezpieczenia przed oddawaniem energii",
-      "510": "Niezgodność wersji oprogramowania",
-      "511": "Błąd wentylatora",
-      "513": "Błąd pracy równoległej"
-    },
-    "warning_main": {
-      "0": "OK",
-      "103": "Sieć niedostępna",
-      "104": "Napięcie sieci poza zakresem",
-      "105": "Częstotliwość sieci poza zakresem",
-      "106": "Brak napięcia wyjściowego z generatora",
-      "107": "Napięcie wyjściowe generatora poza zakresem",
-      "108": "Częstotliwość wyjściowa generatora poza zakresem",
-      "302": "Niski poziom baterii",
-      "304": "Nieprawidłowe informacje z BMS",
-      "305": "Alarm niskiego napięcia baterii",
-      "502": "Błąd odczytu/zapisu pamięci"
-    },
-    "warning_sub": {
-      "0": "Brak ostrzeżenia"
-    },
-    "unknown": {
-      "fault_code": "Nieznany kod awarii",
-      "warning_code": "Nieznany kod ostrzeżenia",
-      "sub_warning_code": "Nieznany podrzędny kod ostrzeżenia",
-      "battery_status": "Nieznany status BMS",
-      "inverter_status": "Nieznany status falownika"
     }
   }
 }

@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "SANDISOLAR Modbus RTU konfigurieren",
-        "description": "Verbindungsdaten für Ihren SANDISOLAR-Wechselrichter eingeben.",
+        "description": "Geben Sie die Verbindungsdaten für Ihren SANDISOLAR-Wechselrichter ein.",
         "data": {
           "port": "Serieller Port",
           "baudrate": "Baudrate",
@@ -17,7 +17,7 @@
       "cannot_connect": "Verbindung zum Gerät fehlgeschlagen.",
       "invalid_port": "Ungültiger serieller Port.",
       "invalid_slave": "Slave-ID muss zwischen 1 und 247 liegen.",
-      "invalid_update_interval": "Aktualisierungsintervall muss mindestens 5 Sekunden betragen.",
+      "invalid_update_interval": "Das Aktualisierungsintervall muss mindestens 5 Sekunden betragen.",
       "unknown": "Unbekannter Fehler."
     },
     "abort": {
@@ -35,75 +35,7 @@
       }
     },
     "error": {
-      "invalid_update_interval": "Aktualisierungsintervall muss mindestens 5 Sekunden betragen."
-    }
-  },
-  "states": {
-    "inverter_status": {
-      "0": "Warten",
-      "1": "Netzbetrieb",
-      "2": "Inselbetrieb",
-      "3": "Fehler",
-      "4": "Flashen / Aktualisierung",
-      "5": "Bypass",
-      "6": "Selbstladung"
-    },
-    "battery_status": {
-      "0": "Normal",
-      "1": "Laden",
-      "2": "Entladen",
-      "3": "Standby"
-    },
-    "fault_word0": {
-      "0": "Kein Fehler",
-      "103": "DC-Offset des Wechselrichters ist zu hoch",
-      "105": "Bypass-AC-Ausgang ist überlastet",
-      "200": "Ausgangsspannung im Inselbetrieb ist zu niedrig",
-      "201": "Ausgangsspannung im Inselbetrieb ist zu hoch",
-      "202": "Kurzschluss am Insel-Ausgang",
-      "203": "Überlast am Insel-Ausgang",
-      "204": "Abnormale DC-Komponente am Insel-Ausgang",
-      "301": "Batterie ist getrennt",
-      "305": "Batterie-Überspannung",
-      "306": "Batterie-Überstrom",
-      "307": "Kommunikationsfehler mit der Batterie",
-      "308": "BMS-Fehler",
-      "400": "PV-Überspannung",
-      "403": "PV-Kurzschluss",
-      "404": "PV-Verpolung",
-      "500": "Abnormale DC-Busspannung",
-      "501": "Fehler bei der Messung der DC-Busspannung",
-      "502": "Interner Kommunikationsfehler",
-      "505": "Fehler beim Temperatursensoranschluss",
-      "506": "Gerät überhitzt",
-      "507": "Relaisfehler",
-      "509": "Zeitüberschreitung der Rückspeiseschutzfunktion",
-      "510": "Softwareversion stimmt nicht überein",
-      "511": "Lüfterfehler",
-      "513": "Fehler im Parallelbetrieb"
-    },
-    "warning_main": {
-      "0": "OK",
-      "103": "Netz nicht verfügbar",
-      "104": "Netzspannung außerhalb des Bereichs",
-      "105": "Netzfrequenz außerhalb des Bereichs",
-      "106": "Keine Ausgangsspannung vom Generator",
-      "107": "Generator-Ausgangsspannung außerhalb des Bereichs",
-      "108": "Generator-Ausgangsfrequenz außerhalb des Bereichs",
-      "302": "Niedriger Batteriestand",
-      "304": "Abnormale BMS-Information",
-      "305": "Warnung: niedrige Batteriespannung",
-      "502": "Speicher-Lese-/Schreibfehler"
-    },
-    "warning_sub": {
-      "0": "Keine Warnung"
-    },
-    "unknown": {
-      "fault_code": "Unbekannter Fehlercode",
-      "warning_code": "Unbekannter Warncode",
-      "sub_warning_code": "Unbekannter untergeordneter Warncode",
-      "battery_status": "Unbekannter BMS-Status",
-      "inverter_status": "Unbekannter Wechselrichterstatus"
+      "invalid_update_interval": "Das Aktualisierungsintervall muss mindestens 5 Sekunden betragen."
     }
   }
 }

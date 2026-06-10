@@ -1,6 +1,5 @@
 {
   "name": "SANDISOLAR SD-PRO-EU Modbus RTU",
   "render_readme": true,
-  "domains": ["sensor", "switch", "number", "select"],
   "homeassistant": "2025.5.0"
 }

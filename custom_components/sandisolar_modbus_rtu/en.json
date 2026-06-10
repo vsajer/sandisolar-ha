@@ -1,0 +1,70 @@
+{
+  "states": {
+    "inverter_status": {
+      "0": "Waiting",
+      "1": "Grid mode",
+      "2": "Off-grid mode",
+      "3": "Fault",
+      "4": "Flashing",
+      "5": "Bypass",
+      "6": "Self-charging"
+    },
+    "battery_status": {
+      "0": "Normal",
+      "1": "Charging",
+      "2": "Discharging",
+      "3": "Standby"
+    },
+    "fault_word0": {
+      "0": "No fault",
+      "103": "Inverter DC offset is too high",
+      "105": "Bypass AC output is overloaded",
+      "200": "Off-grid output voltage is too low",
+      "201": "Off-grid output voltage is too high",
+      "202": "Off-grid output has a short circuit",
+      "203": "Off-grid output is overloaded",
+      "204": "Abnormal off-grid output DC component offset",
+      "301": "Battery open circuit",
+      "305": "Battery overvoltage",
+      "306": "Battery overcurrent",
+      "307": "Battery communication fault",
+      "308": "BMS fault",
+      "400": "PV overvoltage",
+      "403": "PV short circuit",
+      "404": "PV reverse connection",
+      "500": "Abnormal BUS voltage",
+      "501": "Abnormal BUS voltage sampling",
+      "502": "Abnormal internal communication",
+      "505": "Temperature sensor connection fault",
+      "506": "Device over-temperature",
+      "507": "Relay fault",
+      "509": "Anti-backflow output timeout",
+      "510": "Software version mismatch",
+      "511": "Fan fault",
+      "513": "Parallel operation fault"
+    },
+    "warning_main": {
+      "0": "OK",
+      "103": "Grid unavailable",
+      "104": "Grid voltage out of range",
+      "105": "Grid frequency out of range",
+      "106": "No output voltage from generator",
+      "107": "Generator output voltage out of range",
+      "108": "Generator output frequency out of range",
+      "302": "Low battery",
+      "304": "Abnormal BMS information",
+      "305": "Low battery voltage alarm",
+      "502": "Memory read/write error"
+    },
+    "warning_sub": {
+      "0": "No warning"
+    },
+    "unknown": {
+      "fault_code": "Unknown fault code",
+      "warning_code": "Unknown warning code",
+      "sub_warning_code": "Unknown sub-warning code",
+      "battery_status": "Unknown BMS status",
+      "inverter_status": "Unknown inverter status"
+    }
+  }
+}

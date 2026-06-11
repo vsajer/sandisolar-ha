@@ -3,8 +3,18 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.core import callback
+from homeassistant.helpers import selector
 
 from .const import DOMAIN, DEFAULT_SCAN_INTERVAL
+
+
+UPDATE_INTERVAL_OPTIONS = [
+    {"value": "5", "label": "5 sekund"},
+    {"value": "10", "label": "10 sekund"},
+    {"value": "15", "label": "15 sekund"},
+    {"value": "30", "label": "30 sekund"},
+    {"value": "60", "label": "60 sekund"},
+]
 
 
 async def async_list_serial_ports(hass):
@@ -32,10 +42,12 @@ class SandiSolarConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         ports = await async_list_serial_ports(self.hass)
 
         if user_input is not None:
+            update_interval = int(user_input["update_interval"])
+
             if user_input["slave"] < 1 or user_input["slave"] > 247:
                 errors["slave"] = "invalid_slave"
 
-            if user_input["update_interval"] < 5:
+            if update_interval < 5:
                 errors["update_interval"] = "invalid_update_interval"
 
             if not errors:
@@ -45,7 +57,7 @@ class SandiSolarConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         "port": user_input["port"],
                         "baudrate": user_input["baudrate"],
                         "slave": user_input["slave"],
-                        "update_interval": user_input["update_interval"],
+                        "update_interval": update_interval,
                     },
                 )
 
@@ -56,6 +68,11 @@ class SandiSolarConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             port_selector = str
             default_port = "/dev/ttyUSB0"
 
+        default_update_interval = str(DEFAULT_SCAN_INTERVAL)
+
+        if default_update_interval not in ["5", "10", "15", "30", "60"]:
+            default_update_interval = "10"
+
         schema = vol.Schema(
             {
                 vol.Required("port", default=default_port): port_selector,
@@ -65,8 +82,13 @@ class SandiSolarConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required("slave", default=1): int,
                 vol.Required(
                     "update_interval",
-                    default=DEFAULT_SCAN_INTERVAL,
-                ): int,
+                    default=default_update_interval,
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=UPDATE_INTERVAL_OPTIONS,
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
             }
         )
 
@@ -94,24 +116,43 @@ class SandiSolarOptionsFlow(config_entries.OptionsFlow):
         errors = {}
 
         if user_input is not None:
-            if user_input["update_interval"] < 5:
+            update_interval = int(user_input["update_interval"])
+
+            if update_interval < 5:
                 errors["update_interval"] = "invalid_update_interval"
 
             if not errors:
-                return self.async_create_entry(title="", data=user_input)
+                return self.async_create_entry(
+                    title="",
+                    data={
+                        "update_interval": update_interval,
+                    },
+                )
+
+        current_update_interval = self.entry.options.get(
+            "update_interval",
+            self.entry.data.get(
+                "update_interval",
+                DEFAULT_SCAN_INTERVAL,
+            ),
+        )
+
+        current_update_interval = str(current_update_interval)
+
+        if current_update_interval not in ["5", "10", "15", "30", "60"]:
+            current_update_interval = "10"
 
         schema = vol.Schema(
             {
                 vol.Required(
                     "update_interval",
-                    default=self.entry.options.get(
-                        "update_interval",
-                        self.entry.data.get(
-                            "update_interval",
-                            DEFAULT_SCAN_INTERVAL,
-                        ),
-                    ),
-                ): int
+                    default=current_update_interval,
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=UPDATE_INTERVAL_OPTIONS,
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                )
             }
         )
 

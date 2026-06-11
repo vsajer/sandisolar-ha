@@ -13,11 +13,12 @@ from .modbus_map import INPUT_REGISTERS, HOLDING_REGISTERS
 _LOGGER = logging.getLogger(__name__)
 
 
-# Jak dlouho může čtení čekat na volný Modbus.
-# Když je linka vytížená a máme cache, vrátíme cache místo čekání.
+# Jak dlouho může běžné čtení input registrů čekat na volný Modbus.
+# Input registry jsou průběžná měření, takže při vytížení linky můžeme vrátit cache.
 READ_LOCK_TIMEOUT = 1.0
 
-# Zápis je důležitější než běžné čtení, takže může čekat déle.
+# Zápis a čtení holding registrů jsou důležitější.
+# Holding registry jsou nastavení měniče a mohou se změnit i přímo na LCD.
 WRITE_LOCK_TIMEOUT = 5.0
 
 # Malá pauza mezi RTU požadavky.
@@ -44,7 +45,13 @@ class SandiSolarModbusHub:
         self.port = entry.data["port"]
         self.baudrate = entry.data["baudrate"]
         self.slave = entry.data["slave"]
-        self.update_interval = entry.data.get("update_interval", 10)
+
+        # Interval ber primárně z Options flow.
+        # Díky tomu se změna v Možnosti integrace opravdu použije po reloadu entry.
+        self.update_interval = entry.options.get(
+            "update_interval",
+            entry.data.get("update_interval", 10),
+        )
 
         self._client: Optional[AsyncModbusSerialClient] = None
         self._lock = asyncio.Lock()
@@ -217,13 +224,17 @@ class SandiSolarModbusHub:
         return None
 
     async def read_input_register(self, key):
-        """Read input register by key."""
+        """Read input register by key.
+
+        Input registers are live measurements.
+        When Modbus is busy, cached value is acceptable to keep sensors stable.
+        """
 
         if key not in INPUT_REGISTERS:
             _LOGGER.error("SANDISOLAR: Unknown input register '%s'", key)
             return None
 
-        # Když je Modbus zaneprázdněný, raději vrať cache než čekat 10+ sekund.
+        # Když je Modbus zaneprázdněný, u měření raději vrať cache.
         if self._lock.locked() and key in self._cache:
             return self._cache[key]
 
@@ -246,25 +257,29 @@ class SandiSolarModbusHub:
             self._lock.release()
 
     async def read_holding_register(self, key):
-        """Read holding register by key."""
+        """Read holding register by key.
+
+        Holding registers are inverter settings.
+        Always try to read real value from inverter because settings can be
+        changed directly on inverter LCD.
+
+        Important:
+        Do not immediately return cached values here when Modbus is busy.
+        Otherwise Home Assistant may keep showing old settings after a change
+        made directly on the inverter LCD.
+        """
 
         if key not in HOLDING_REGISTERS:
             _LOGGER.error("SANDISOLAR: Unknown holding register '%s'", key)
             return None
 
-        # Když je Modbus zaneprázdněný, raději vrať cache než čekat 10+ sekund.
-        if self._lock.locked() and key in self._cache:
-            return self._cache[key]
-
-        locked = await self._acquire_lock(READ_LOCK_TIMEOUT)
+        # Holding registry jsou nastavení.
+        # Počkáme déle, aby se změny z LCD měniče propsaly do HA.
+        locked = await self._acquire_lock(WRITE_LOCK_TIMEOUT)
 
         if not locked:
-            cached = self._cached_or_none(key, "modbus_busy")
-            if cached is not None:
-                return cached
-
             _LOGGER.debug(
-                "SANDISOLAR: Holding read skipped for %s, Modbus busy and no cache",
+                "SANDISOLAR: Holding read skipped for %s, Modbus busy",
                 key,
             )
             return None
@@ -373,6 +388,7 @@ class SandiSolarModbusHub:
             _LOGGER.warning("SANDISOLAR: Write Modbus error %s=%s: %s", key, value, result)
             return False
 
+        # Po zápisu z HA víme, co jsme nastavili, takže cache může být aktualizovaná.
         self._cache[key] = value
         return True
 

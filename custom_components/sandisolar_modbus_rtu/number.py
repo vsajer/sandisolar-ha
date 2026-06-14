@@ -1,4 +1,5 @@
 import logging
+from datetime import timedelta
 
 from homeassistant.components.number import NumberEntity
 from homeassistant.const import (
@@ -8,6 +9,7 @@ from homeassistant.const import (
     UnitOfPower,
     EntityCategory,
 )
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import DOMAIN
@@ -143,13 +145,6 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
         # -------------------------------------------------------------
         # SecEPS thresholds - SOC
-        #
-        # Důležité:
-        # v modbus_map.py musí být:
-        # "sec_eps_on_soc": RegisterDef(219)
-        # "sec_eps_off_soc": RegisterDef(221)
-        #
-        # Ne RegisterDef(..., 0.01), jinak se z 73 % stane 7300 nebo 0.73.
         # -------------------------------------------------------------
         SandiSolarNumber(
             hub,
@@ -174,33 +169,30 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
         # -------------------------------------------------------------
         # SecEPS thresholds - Voltage
-        #
-        # Tyhle jsou schované jako Advanced / Config.
-        # Pro lithium/BMS režim jsou spíš pokročilé nastavení.
-        # Zatím je nechávám zakomentované, jak jsi měl.
+        # Advanced / Config
         # -------------------------------------------------------------
-         SandiSolarNumber(
-             hub,
-             "sec_eps_on_vbat",
-             "ADV - SecEPS ON Voltage",
-             UnitOfElectricPotential.VOLT,
-             40,
-             90,
-             0.1,
-             "mdi:alert-circle-outline",
-             advanced=True,
-         ),
-         SandiSolarNumber(
-             hub,
-             "sec_eps_off_vbat",
-             "ADV - SecEPS OFF Voltage",
-             UnitOfElectricPotential.VOLT,
-             40,
-             90,
-             0.1,
-             "mdi:alert-circle-outline",
-             advanced=True,
-         ),
+        SandiSolarNumber(
+            hub,
+            "sec_eps_on_vbat",
+            "ADV - SecEPS ON Voltage",
+            UnitOfElectricPotential.VOLT,
+            40,
+            90,
+            0.1,
+            "mdi:alert-circle-outline",
+            advanced=True,
+        ),
+        SandiSolarNumber(
+            hub,
+            "sec_eps_off_vbat",
+            "ADV - SecEPS OFF Voltage",
+            UnitOfElectricPotential.VOLT,
+            40,
+            90,
+            0.1,
+            "mdi:alert-circle-outline",
+            advanced=True,
+        ),
 
         # -------------------------------------------------------------
         # SecEPS ON PV Power Min
@@ -229,8 +221,9 @@ class SandiSolarNumber(NumberEntity):
     # Číselné zadávání místo posuvníku.
     _attr_mode = "box"
 
-    # Tohle jsou konfigurační hodnoty, ne živé senzory.
-    # Nechceme, aby každá number entita pořád sama pollovala Modbus.
+    # Důležité:
+    # Nechceme spoléhat jen na HA default polling.
+    # Polling si řídíme sami podle hub.update_interval, aby Options flow fungoval.
     _attr_should_poll = False
 
     def __init__(
@@ -277,9 +270,32 @@ class SandiSolarNumber(NumberEntity):
         return self._state
 
     async def async_added_to_hass(self):
-        """Read initial value once when entity is added to Home Assistant."""
+        """Read initial value and start periodic refresh.
+
+        This is important because inverter settings can be changed directly
+        on the inverter LCD. Home Assistant must periodically read holding
+        registers again, otherwise it keeps old values forever.
+        """
+
         await self.async_update()
         self.async_write_ha_state()
+
+        interval = int(getattr(self._hub, "update_interval", 10) or 10)
+
+        if interval < 5:
+            interval = 5
+
+        async def _periodic_refresh(now):
+            await self.async_update()
+            self.async_write_ha_state()
+
+        self.async_on_remove(
+            async_track_time_interval(
+                self.hass,
+                _periodic_refresh,
+                timedelta(seconds=interval),
+            )
+        )
 
     def _normalize_value(self, value):
         """Normalize value for Home Assistant display."""
@@ -297,7 +313,6 @@ class SandiSolarNumber(NumberEntity):
 
         if val is None:
             self._attr_available = False
-            self._state = None
             return
 
         self._attr_available = True
@@ -337,7 +352,7 @@ class SandiSolarNumber(NumberEntity):
         return True
 
     async def async_set_native_value(self, value: float):
-        """Write value immediately and update local Home Assistant state."""
+        """Write value immediately and update Home Assistant state."""
 
         # Hodnota z HA může přijít jako float i u kroku 1.
         # Škálování řeší hub / modbus_map.py, sem posíláme hodnotu v HA jednotkách.
@@ -359,10 +374,15 @@ class SandiSolarNumber(NumberEntity):
             self.async_write_ha_state()
             return
 
-        # Okamžitě ukaž novou hodnotu v HA.
-        # Skutečné potvrzení přijde až při dalším ručním / startovacím čtení,
-        # ale zbytečně teď nezahlcujeme Modbus.
-        self._state = self._normalize_value(write_value)
+        # Po zápisu z HA se pokusíme hned přečíst skutečnou hodnotu z měniče.
+        # Když se čtení nepovede, zobrazíme alespoň požadovanou hodnotu.
+        real_value = await self._hub.read_holding_register(self._key)
+
+        if real_value is not None:
+            self._state = self._normalize_value(real_value)
+        else:
+            self._state = self._normalize_value(write_value)
+
         self._attr_available = True
         self.async_write_ha_state()
 

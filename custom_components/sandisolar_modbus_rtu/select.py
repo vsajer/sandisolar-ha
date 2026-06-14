@@ -1,8 +1,10 @@
 import asyncio
 import logging
+from datetime import timedelta
 
 from homeassistant.components.select import SelectEntity
 from homeassistant.const import EntityCategory
+from homeassistant.helpers.event import async_track_time_interval
 
 from .const import DOMAIN
 
@@ -85,6 +87,9 @@ class SandiSolarSelect(SelectEntity):
     """Select entity for SANDISOLAR SD-PRO-EU."""
 
     _attr_has_entity_name = True
+
+    # Polling si řídíme sami přes async_track_time_interval,
+    # aby se změny z LCD měniče pravidelně propsaly do HA.
     _attr_should_poll = False
 
     def __init__(self, hub, key, name, mapping, icon, advanced=False):
@@ -127,7 +132,12 @@ class SandiSolarSelect(SelectEntity):
         return self._unknown_option
 
     async def async_added_to_hass(self):
-        """Read initial value once when entity is added to Home Assistant."""
+        """Read initial value and start periodic refresh.
+
+        This is important because select settings can be changed directly
+        on the inverter LCD.
+        """
+
         for attempt in range(3):
             await self.async_update()
 
@@ -138,6 +148,23 @@ class SandiSolarSelect(SelectEntity):
 
         self.async_write_ha_state()
 
+        interval = int(getattr(self._hub, "update_interval", 10) or 10)
+
+        if interval < 5:
+            interval = 5
+
+        async def _periodic_refresh(now):
+            await self.async_update()
+            self.async_write_ha_state()
+
+        self.async_on_remove(
+            async_track_time_interval(
+                self.hass,
+                _periodic_refresh,
+                timedelta(seconds=interval),
+            )
+        )
+
     async def async_update(self):
         """Read current select value from inverter."""
         val = await self._hub.read_holding_register(self._key)
@@ -147,7 +174,6 @@ class SandiSolarSelect(SelectEntity):
 
             if cached is None:
                 self._attr_available = False
-                self._state = None
                 self._attr_extra_state_attributes = {
                     "raw_value": None,
                     "read_error": True,
@@ -162,6 +188,7 @@ class SandiSolarSelect(SelectEntity):
         self._attr_extra_state_attributes = {
             "raw_value": self._state,
             "known_values": dict(self._mapping),
+            "read_error": False,
         }
 
         known_values = [int(v) for v in self._mapping.values()]
@@ -211,12 +238,31 @@ class SandiSolarSelect(SelectEntity):
             self.async_write_ha_state()
             return
 
-        self._state = value
+        # Po zápisu z HA se pokusíme hned přečíst skutečnou hodnotu z měniče.
+        # Když se čtení nepovede, zobrazíme alespoň požadovanou hodnotu.
+        real_value = await self._hub.read_holding_register(self._key)
+
+        if real_value is not None:
+            self._state = int(real_value)
+        else:
+            self._state = value
+
         self._unknown_option = None
         self._attr_options = list(self._mapping.keys())
         self._attr_available = True
         self._attr_extra_state_attributes = {
             "raw_value": self._state,
             "known_values": dict(self._mapping),
+            "read_error": False,
         }
+
+        # Když měnič vrátí neznámou hodnotu, přidej diagnostickou volbu.
+        known_values = [int(v) for v in self._mapping.values()]
+
+        if self._state not in known_values:
+            self._unknown_option = f"Unknown ({self._state})"
+            self._attr_options = list(self._mapping.keys()) + [
+                self._unknown_option
+            ]
+
         self.async_write_ha_state()

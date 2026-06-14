@@ -1,7 +1,9 @@
 import logging
+from datetime import timedelta
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.const import EntityCategory
+from homeassistant.helpers.event import async_track_time_interval
 
 from .const import DOMAIN
 
@@ -202,6 +204,9 @@ class SandiSolarBitmaskSwitch(SwitchEntity):
     """Switch entity for one bit inside SANDISOLAR bitmask register."""
 
     _attr_has_entity_name = True
+
+    # Polling si řídíme sami podle hub.update_interval,
+    # aby se změny z LCD měniče pravidelně propsaly do HA.
     _attr_should_poll = False
 
     def __init__(
@@ -224,6 +229,7 @@ class SandiSolarBitmaskSwitch(SwitchEntity):
         self._attr_unique_id = f"sandisolar_switch_{register_key}_{key}"
         self._attr_icon = icon
         self._attr_available = True
+        self._attr_extra_state_attributes = {}
 
         if advanced:
             self._attr_entity_category = EntityCategory.CONFIG
@@ -248,21 +254,59 @@ class SandiSolarBitmaskSwitch(SwitchEntity):
         return bool(int(self._raw_value) & self._mask)
 
     async def async_added_to_hass(self):
-        """Read initial value once when entity is added."""
+        """Read initial value and start periodic refresh.
+
+        Bitmask switches can be changed directly on the inverter LCD,
+        so they must be read repeatedly from holding registers.
+        """
+
         await self.async_update()
         self.async_write_ha_state()
+
+        interval = int(getattr(self._hub, "update_interval", 10) or 10)
+
+        if interval < 5:
+            interval = 5
+
+        async def _periodic_refresh(now):
+            await self.async_update()
+            self.async_write_ha_state()
+
+        self.async_on_remove(
+            async_track_time_interval(
+                self.hass,
+                _periodic_refresh,
+                timedelta(seconds=interval),
+            )
+        )
 
     async def async_update(self):
         """Read current bitmask value from inverter."""
         val = await self._hub.read_holding_register(self._register_key)
 
         if val is None:
-            self._attr_available = False
-            self._raw_value = None
-            return
+            cached = self._hub.get_cached(self._register_key)
+
+            if cached is None:
+                self._attr_available = False
+                self._attr_extra_state_attributes = {
+                    "raw_value": None,
+                    "bit": self._bit,
+                    "mask": self._mask,
+                    "read_error": True,
+                }
+                return
+
+            val = cached
 
         self._attr_available = True
         self._raw_value = int(val)
+        self._attr_extra_state_attributes = {
+            "raw_value": self._raw_value,
+            "bit": self._bit,
+            "mask": self._mask,
+            "read_error": False,
+        }
 
     async def async_turn_on(self, **kwargs):
         await self._set_bit(True)
@@ -314,10 +358,22 @@ class SandiSolarBitmaskSwitch(SwitchEntity):
             self.async_write_ha_state()
             return
 
-        # Okamžitě ukaž nový stav v Home Assistantu.
-        # Nečteme hned znovu měnič, ať zbytečně necpeme další dotaz do Modbus fronty.
-        self._raw_value = new_value
+        # Po zápisu z HA se pokusíme hned přečíst skutečný stav z měniče.
+        # Když se čtení nepovede, zobrazíme alespoň vypočtenou hodnotu.
+        real_value = await self._hub.read_holding_register(self._register_key)
+
+        if real_value is not None:
+            self._raw_value = int(real_value)
+        else:
+            self._raw_value = new_value
+
         self._attr_available = True
+        self._attr_extra_state_attributes = {
+            "raw_value": self._raw_value,
+            "bit": self._bit,
+            "mask": self._mask,
+            "read_error": False,
+        }
         self.async_write_ha_state()
 
 
@@ -325,6 +381,9 @@ class SandiSolarRegisterSwitch(SwitchEntity):
     """Simple 0/1 holding register switch for SANDISOLAR."""
 
     _attr_has_entity_name = True
+
+    # Polling si řídíme sami podle hub.update_interval,
+    # aby se změny z LCD měniče pravidelně propsaly do HA.
     _attr_should_poll = False
 
     def __init__(self, hub, key, name, icon, advanced=False):
@@ -335,6 +394,7 @@ class SandiSolarRegisterSwitch(SwitchEntity):
         self._attr_unique_id = f"sandisolar_switch_{key}"
         self._attr_icon = icon
         self._attr_available = True
+        self._attr_extra_state_attributes = {}
 
         if advanced:
             self._attr_entity_category = EntityCategory.CONFIG
@@ -359,21 +419,55 @@ class SandiSolarRegisterSwitch(SwitchEntity):
         return int(self._state) == 1
 
     async def async_added_to_hass(self):
-        """Read initial value once when entity is added."""
+        """Read initial value and start periodic refresh.
+
+        Register switches can be changed directly on the inverter LCD,
+        so they must be read repeatedly from holding registers.
+        """
+
         await self.async_update()
         self.async_write_ha_state()
+
+        interval = int(getattr(self._hub, "update_interval", 10) or 10)
+
+        if interval < 5:
+            interval = 5
+
+        async def _periodic_refresh(now):
+            await self.async_update()
+            self.async_write_ha_state()
+
+        self.async_on_remove(
+            async_track_time_interval(
+                self.hass,
+                _periodic_refresh,
+                timedelta(seconds=interval),
+            )
+        )
 
     async def async_update(self):
         """Read current switch value from inverter."""
         val = await self._hub.read_holding_register(self._key)
 
         if val is None:
-            self._attr_available = False
-            self._state = None
-            return
+            cached = self._hub.get_cached(self._key)
+
+            if cached is None:
+                self._attr_available = False
+                self._attr_extra_state_attributes = {
+                    "raw_value": None,
+                    "read_error": True,
+                }
+                return
+
+            val = cached
 
         self._attr_available = True
         self._state = int(val)
+        self._attr_extra_state_attributes = {
+            "raw_value": self._state,
+            "read_error": False,
+        }
 
     async def async_turn_on(self, **kwargs):
         await self._write_state(1)
@@ -394,9 +488,18 @@ class SandiSolarRegisterSwitch(SwitchEntity):
             self.async_write_ha_state()
             return
 
-        # Okamžitě ukaž nový stav v Home Assistantu.
-        # Skutečný stav se znovu načte až při startu / reloadu integrace,
-        # ne hned po zápisu, aby se nezahltil Modbus.
-        self._state = value
+        # Po zápisu z HA se pokusíme hned přečíst skutečný stav z měniče.
+        # Když se čtení nepovede, zobrazíme alespoň požadovanou hodnotu.
+        real_value = await self._hub.read_holding_register(self._key)
+
+        if real_value is not None:
+            self._state = int(real_value)
+        else:
+            self._state = int(value)
+
         self._attr_available = True
+        self._attr_extra_state_attributes = {
+            "raw_value": self._state,
+            "read_error": False,
+        }
         self.async_write_ha_state()

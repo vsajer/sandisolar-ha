@@ -91,7 +91,7 @@ FAULT_WORD0_MAP = {
 
 WARNING_MAIN_MAP = {
     0: "OK",
-    103: "Grid unavailable",
+    103: "Síť není dostupná / ostrovní režim",
     104: "Overrange voltage of grid",
     105: "Overrange frequency of grid",
     106: "No output voltage from the generator",
@@ -1367,7 +1367,39 @@ class WarningMainTextSensor(BaseSandiSensor):
             return
 
         code = int(val)
-        fallback = WARNING_MAIN_MAP.get(code, "Unknown warning code")
+        inverter_status = _safe_float(
+            self._get_value("inverter_status"),
+            0,
+        )
+        grid_voltage = _safe_float(
+            self._get_value("grid_voltage"),
+            0,
+        )
+
+        # 103 = grid unavailable.
+        # In off-grid mode or when grid input is not used, this is expected.
+        if code == 103 and (
+            int(inverter_status) == 2
+            or grid_voltage is None
+            or grid_voltage < 30
+        ):
+            text = self._tr_state(
+                "warning_main",
+                code,
+                "Síť není dostupná / ostrovní režim",
+            )
+            self._attr_native_value = f"{code} - {text}"
+            self._attr_extra_state_attributes = {
+                "raw_value": code,
+                "message": text,
+                "ignored_as_fault": True,
+                "reason": "grid_not_used_or_off_grid_mode",
+                "inverter_status": int(inverter_status),
+                "grid_voltage": grid_voltage,
+            }
+            return
+
+        fallback = WARNING_MAIN_MAP.get(code, "Neznámý kód varování")
         text = self._tr_state("warning_main", code, fallback)
 
         if code not in WARNING_MAIN_MAP:
@@ -1377,6 +1409,9 @@ class WarningMainTextSensor(BaseSandiSensor):
         self._attr_extra_state_attributes = {
             "raw_value": code,
             "message": text,
+            "ignored_as_fault": False,
+            "inverter_status": int(inverter_status),
+            "grid_voltage": grid_voltage,
         }
 
 
@@ -1484,7 +1519,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
         keys=SENSOR_KEYS,
     )
 
-    await coordinator.async_config_entry_first_refresh()
+    # Do not block Home Assistant startup by waiting for all Modbus reads.
+    # First real refresh is scheduled after entities are added.
+    coordinator.async_set_updated_data({})
 
     entities = [
         SimpleSensor(coordinator, "pv1_voltage", "PV1 Voltage",
@@ -1632,3 +1669,6 @@ async def async_setup_entry(hass, entry, async_add_entities):
     ]
 
     async_add_entities(entities)
+
+    # Run first real Modbus refresh in background.
+    hass.async_create_task(coordinator.async_request_refresh())

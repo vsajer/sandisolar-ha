@@ -1001,7 +1001,7 @@ class BatteryChargeEtaSensor(BaseSandiSensor):
 
 
 class BatteryChargeEtaMinutesSensor(BaseSandiSensor):
-    """Virtual numeric countdown sensor until End of Charge SOC is reached."""
+    """Virtual numeric countdown sensor until usable SOC reaches 100 %."""
 
     _attr_native_unit_of_measurement = UnitOfTime.MINUTES
     _attr_device_class = SensorDeviceClass.DURATION
@@ -1035,6 +1035,27 @@ class BatteryChargeEtaMinutesSensor(BaseSandiSensor):
             return DEFAULT_END_OF_CHARGE_SOC
 
         return _clamp(float(target), 1, 100)
+
+    def _lower_soc(self, inverter_status):
+        on_grid = self._get_cached_holding("on_grid_discharge_soc", 0)
+        off_grid = self._get_cached_holding("off_grid_discharge_soc", 0)
+
+        if int(inverter_status) == 2:
+            return _clamp(float(off_grid), 0, 100), "off_grid_discharge_soc"
+
+        return _clamp(float(on_grid), 0, 100), "on_grid_discharge_soc"
+
+    def _real_soc(self, soc, target):
+        inverter_status = _safe_float(self._get_value("inverter_status"), 0)
+        lower, lower_source = self._lower_soc(inverter_status)
+
+        if target <= lower:
+            return None, lower, lower_source, int(inverter_status)
+
+        real_soc = ((float(soc) - lower) / (target - lower)) * 100
+        real_soc = _clamp(real_soc, 0, 100)
+
+        return real_soc, lower, lower_source, int(inverter_status)
 
     def _battery_capacity_ah(self):
         fcc = _safe_float(self._get_value("bms_fcc"), 0)
@@ -1120,7 +1141,28 @@ class BatteryChargeEtaMinutesSensor(BaseSandiSensor):
             self._charged_at = None
             self._charged_date = None
 
-        if soc >= target:
+        real_soc, lower_soc, lower_source, inverter_status = self._real_soc(
+            soc,
+            target,
+        )
+
+        if real_soc is None:
+            self._attr_native_value = 999
+            self._attr_extra_state_attributes = {
+                "status": "invalid_soc_limits",
+                "target_soc": round(target, 1),
+                "current_soc": round(soc, 1),
+                "minutes_until_full": 999,
+                "lower_limit": round(lower_soc, 1),
+                "lower_source": lower_source,
+                "inverter_status": inverter_status,
+            }
+            return
+
+        usable_range = target - lower_soc
+
+        # Fully charged usable SOC.
+        if real_soc >= 100:
             if self._charged_at is None:
                 self._charged_at = now_local
                 self._charged_date = today
@@ -1130,29 +1172,44 @@ class BatteryChargeEtaMinutesSensor(BaseSandiSensor):
                 "status": "charged",
                 "target_soc": round(target, 1),
                 "current_soc": round(soc, 1),
+                "battery_soc_real": round(real_soc, 1),
+                "minutes_until_full": 0,
                 "charged_at": self._charged_at.isoformat(),
                 "latched": True,
+                "lower_limit": round(lower_soc, 1),
+                "lower_source": lower_source,
+                "usable_range_percent": round(usable_range, 1),
+                "inverter_status": inverter_status,
             }
             return
 
-        if (
-            self._charged_at is not None
-            and soc >= target - CHARGE_ETA_HYSTERESIS
-        ):
+        # After Home Assistant restart the in-memory latch is lost.
+        # If usable SOC is still almost full, keep the countdown at 0 min.
+        if real_soc >= 98:
+            if self._charged_at is None:
+                self._charged_at = now_local
+                self._charged_date = today
+
             self._attr_native_value = 0
             self._attr_extra_state_attributes = {
-                "status": "charged_latched",
+                "status": "charged_latched_after_restart",
                 "target_soc": round(target, 1),
                 "current_soc": round(soc, 1),
+                "battery_soc_real": round(real_soc, 1),
+                "minutes_until_full": 0,
                 "charged_at": self._charged_at.isoformat(),
                 "latched": True,
-                "hysteresis_percent": CHARGE_ETA_HYSTERESIS,
+                "real_soc_hysteresis_percent": 98,
+                "lower_limit": round(lower_soc, 1),
+                "lower_source": lower_source,
+                "usable_range_percent": round(usable_range, 1),
+                "inverter_status": inverter_status,
             }
             return
 
-        if soc < target - CHARGE_ETA_HYSTERESIS:
-            self._charged_at = None
-            self._charged_date = None
+        # Under charged band, clear latch and calculate ETA again.
+        self._charged_at = None
+        self._charged_date = None
 
         speed, capacity_ah, capacity_source, avg_power = self._battery_power_speed()
 
@@ -1162,8 +1219,12 @@ class BatteryChargeEtaMinutesSensor(BaseSandiSensor):
                 "status": "waiting_for_calculation",
                 "target_soc": round(target, 1),
                 "current_soc": round(soc, 1),
+                "battery_soc_real": round(real_soc, 1),
                 "minutes_until_full": 999,
                 "fallback_reason": "calculation_not_ready",
+                "lower_limit": round(lower_soc, 1),
+                "lower_source": lower_source,
+                "usable_range_percent": round(usable_range, 1),
                 "samples": len(self._samples),
                 "max_samples": self._sample_count,
             }
@@ -1175,19 +1236,42 @@ class BatteryChargeEtaMinutesSensor(BaseSandiSensor):
                 "status": "not_charging",
                 "target_soc": round(target, 1),
                 "current_soc": round(soc, 1),
+                "battery_soc_real": round(real_soc, 1),
                 "minutes_until_full": 999,
                 "fallback_reason": "charging_not_available",
-                "speed_percent_per_hour": round(speed, 2),
+                "speed_percent_per_hour_raw_soc": round(speed, 2),
                 "average_battery_power_w": (
                     None if avg_power is None else round(avg_power, 1)
                 ),
                 "battery_capacity_ah": round(capacity_ah, 1),
                 "battery_capacity_source": capacity_source,
+                "lower_limit": round(lower_soc, 1),
+                "lower_source": lower_source,
+                "usable_range_percent": round(usable_range, 1),
             }
             return
 
-        remaining = max(0, target - soc)
-        hours = remaining / speed
+        real_speed = speed * (100 / usable_range)
+        remaining_real = max(0, 100 - real_soc)
+
+        if real_speed <= 0:
+            self._attr_native_value = 999
+            self._attr_extra_state_attributes = {
+                "status": "not_charging_real_soc",
+                "target_soc": round(target, 1),
+                "current_soc": round(soc, 1),
+                "battery_soc_real": round(real_soc, 1),
+                "minutes_until_full": 999,
+                "fallback_reason": "real_soc_speed_not_available",
+                "speed_percent_per_hour_raw_soc": round(speed, 2),
+                "speed_percent_per_hour_real_soc": round(real_speed, 2),
+                "lower_limit": round(lower_soc, 1),
+                "lower_source": lower_source,
+                "usable_range_percent": round(usable_range, 1),
+            }
+            return
+
+        hours = remaining_real / real_speed
 
         if hours > CHARGE_ETA_MAX_HOURS:
             self._attr_native_value = 999
@@ -1195,8 +1279,10 @@ class BatteryChargeEtaMinutesSensor(BaseSandiSensor):
                 "status": "not_today",
                 "target_soc": round(target, 1),
                 "current_soc": round(soc, 1),
-                "remaining_percent": round(remaining, 1),
-                "speed_percent_per_hour": round(speed, 2),
+                "battery_soc_real": round(real_soc, 1),
+                "remaining_real_percent": round(remaining_real, 1),
+                "speed_percent_per_hour_raw_soc": round(speed, 2),
+                "speed_percent_per_hour_real_soc": round(real_speed, 2),
                 "estimated_hours": round(hours, 2),
                 "minutes_until_full": 999,
                 "max_hours": CHARGE_ETA_MAX_HOURS,
@@ -1206,6 +1292,9 @@ class BatteryChargeEtaMinutesSensor(BaseSandiSensor):
                 ),
                 "battery_capacity_ah": round(capacity_ah, 1),
                 "battery_capacity_source": capacity_source,
+                "lower_limit": round(lower_soc, 1),
+                "lower_source": lower_source,
+                "usable_range_percent": round(usable_range, 1),
                 "samples": len(self._samples),
                 "max_samples": self._sample_count,
             }
@@ -1213,7 +1302,7 @@ class BatteryChargeEtaMinutesSensor(BaseSandiSensor):
 
         minutes = int(round(hours * 60))
 
-        if remaining > 0 and minutes < 1:
+        if remaining_real > 0 and minutes < 1:
             minutes = 1
 
         finish = now_local + timedelta(minutes=minutes)
@@ -1223,8 +1312,10 @@ class BatteryChargeEtaMinutesSensor(BaseSandiSensor):
             "status": "ok",
             "target_soc": round(target, 1),
             "current_soc": round(soc, 1),
-            "remaining_percent": round(remaining, 1),
-            "speed_percent_per_hour": round(speed, 2),
+            "battery_soc_real": round(real_soc, 1),
+            "remaining_real_percent": round(remaining_real, 1),
+            "speed_percent_per_hour_raw_soc": round(speed, 2),
+            "speed_percent_per_hour_real_soc": round(real_speed, 2),
             "estimated_hours": round(hours, 2),
             "estimated_finish_time": finish.isoformat(),
             "average_battery_power_w": (
@@ -1232,9 +1323,13 @@ class BatteryChargeEtaMinutesSensor(BaseSandiSensor):
             ),
             "battery_capacity_ah": round(capacity_ah, 1),
             "battery_capacity_source": capacity_source,
+            "lower_limit": round(lower_soc, 1),
+            "lower_source": lower_source,
+            "usable_range_percent": round(usable_range, 1),
             "samples": len(self._samples),
             "max_samples": self._sample_count,
         }
+
 
 
 class BatterySocRealSensor(BaseSandiSensor):
@@ -1550,9 +1645,16 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
         SimpleSensor(coordinator, "battery_voltage", "Battery Voltage",
                      UnitOfElectricPotential.VOLT, SensorDeviceClass.VOLTAGE, "mdi:battery", 1),
-        SimpleSensor(coordinator, "battery_soc", "Battery SOC",
-                     PERCENTAGE, SensorDeviceClass.BATTERY, "mdi:battery-high", 0),
+        # Put usable SOC first and mark it as the main battery sensor.
+        # Home Assistant device page usually uses the first battery-class sensor
+        # as the battery value shown in the device header.
         BatterySocRealSensor(coordinator, "battery_soc_real", "Battery SOC Real"),
+
+        # Raw inverter SOC is still available, but it is not marked as
+        # SensorDeviceClass.BATTERY so it should not be used as the device
+        # header battery value.
+        SimpleSensor(coordinator, "battery_soc", "Battery SOC Raw",
+                     PERCENTAGE, None, "mdi:battery-high", 0),
         SimpleSensor(coordinator, "battery_temp", "Battery Temperature",
                      UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE, "mdi:thermometer", 1),
         SimpleSensor(coordinator, "battery_current", "Battery Current",

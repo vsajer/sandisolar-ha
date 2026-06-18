@@ -28,6 +28,13 @@ MIN_REQUEST_GAP = 0.12
 # Krátká pauza před opakováním neúspěšného požadavku.
 REQUEST_RETRY_DELAY = 0.25
 
+# Tvrdý timeout pro jednu Modbus operaci.
+# Když pymodbus/serial zatuhne, nesmí držet lock navždy.
+MODBUS_OPERATION_TIMEOUT = 4.0
+
+# Po kolika po sobě jdoucích chybách klienta zahodit a připojit znovu.
+MAX_CONSECUTIVE_ERRORS = 3
+
 # Počet pokusů o připojení při startu integrace.
 CONNECT_ATTEMPTS = 3
 
@@ -57,6 +64,8 @@ class SandiSolarModbusHub:
         self._lock = asyncio.Lock()
         self._cache: Dict[str, Any] = {}
         self._last_request_time = 0.0
+        self._consecutive_errors = 0
+        self._last_success_time = 0.0
 
     async def async_init(self):
         """Initialize Modbus client.
@@ -234,10 +243,6 @@ class SandiSolarModbusHub:
             _LOGGER.error("SANDISOLAR: Unknown input register '%s'", key)
             return None
 
-        # Když je Modbus zaneprázdněný, u měření raději vrať cache.
-        if self._lock.locked() and key in self._cache:
-            return self._cache[key]
-
         locked = await self._acquire_lock(READ_LOCK_TIMEOUT)
 
         if not locked:
@@ -393,7 +398,12 @@ class SandiSolarModbusHub:
         return True
 
     async def _execute_with_retry(self, action_name: str, key: str, operation):
-        """Execute one Modbus operation with one retry on transient failures."""
+        """Execute one Modbus operation with retry and hard timeout.
+
+        Without a hard timeout one stuck serial/pymodbus request can hold the
+        Modbus lock forever. Then input sensors only return cached values and
+        everything looks frozen until Home Assistant is restarted.
+        """
 
         for attempt in range(1, 3):
             try:
@@ -404,7 +414,10 @@ class SandiSolarModbusHub:
                 # Nepředávat slave= ani unit= do Modbus metod.
                 self._client.unit_id = self.slave
 
-                result = await operation()
+                result = await asyncio.wait_for(
+                    operation(),
+                    timeout=MODBUS_OPERATION_TIMEOUT,
+                )
 
                 if result is None:
                     _LOGGER.debug(
@@ -418,11 +431,32 @@ class SandiSolarModbusHub:
                         await asyncio.sleep(REQUEST_RETRY_DELAY)
                         continue
 
+                self._consecutive_errors = 0
+                self._last_success_time = time.monotonic()
                 return result
 
             except asyncio.CancelledError:
                 _LOGGER.debug("SANDISOLAR: %s cancelled %s", action_name, key)
                 raise
+
+            except asyncio.TimeoutError:
+                self._consecutive_errors += 1
+
+                _LOGGER.warning(
+                    "SANDISOLAR: %s timeout for %s, attempt %s/2, errors=%s",
+                    action_name,
+                    key,
+                    attempt,
+                    self._consecutive_errors,
+                )
+
+                await self._drop_connection(f"{action_name} timeout for {key}")
+
+                if attempt == 1:
+                    await asyncio.sleep(REQUEST_RETRY_DELAY)
+                    continue
+
+                return None
 
             except Exception as err:
                 err_text = str(err)
@@ -436,20 +470,24 @@ class SandiSolarModbusHub:
                     or "failed to reconnect" in err_text.lower()
                 )
 
+                self._consecutive_errors += 1
+
                 if transient:
                     _LOGGER.debug(
-                        "SANDISOLAR: %s transient error %s, attempt %s/2: %s",
+                        "SANDISOLAR: %s transient error %s, attempt %s/2, errors=%s: %s",
                         action_name,
                         key,
                         attempt,
+                        self._consecutive_errors,
                         err,
                     )
                 else:
                     _LOGGER.warning(
-                        "SANDISOLAR: %s error %s, attempt %s/2: %s",
+                        "SANDISOLAR: %s error %s, attempt %s/2, errors=%s: %s",
                         action_name,
                         key,
                         attempt,
+                        self._consecutive_errors,
                         err,
                     )
 
@@ -462,6 +500,7 @@ class SandiSolarModbusHub:
                 return None
 
         return None
+
 
     def _decode(self, registers, signed=False):
         """Decode Modbus registers."""

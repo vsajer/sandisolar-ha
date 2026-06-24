@@ -16,6 +16,22 @@ UPDATE_INTERVAL_OPTIONS = [
     {"value": "60", "label": "60 sekund"},
 ]
 
+SETTINGS_REFRESH_INTERVAL_OPTIONS = [
+    {"value": "10", "label": "10 sekund"},
+    {"value": "15", "label": "15 sekund"},
+    {"value": "30", "label": "30 sekund"},
+    {"value": "60", "label": "60 sekund"},
+    {"value": "120", "label": "120 sekund"},
+    {"value": "300", "label": "300 sekund"},
+]
+
+WRITE_VERIFY_DELAY_OPTIONS = [
+    {"value": "0.2", "label": "0,2 s"},
+    {"value": "0.5", "label": "0,5 s"},
+    {"value": "1.0", "label": "1,0 s"},
+    {"value": "2.0", "label": "2,0 s"},
+]
+
 
 async def async_list_serial_ports(hass):
     """List available serial ports."""
@@ -28,6 +44,29 @@ async def async_list_serial_ports(hass):
         )
 
     return await hass.async_add_executor_job(_scan)
+
+
+def _default_select(value, allowed, fallback):
+    value = str(value)
+
+    if value not in allowed:
+        return fallback
+
+    return value
+
+
+def _number_box(min_value, max_value, step, unit=None):
+    config = selector.NumberSelectorConfig(
+        min=min_value,
+        max=max_value,
+        step=step,
+        mode=selector.NumberSelectorMode.BOX,
+    )
+
+    if unit is not None:
+        config["unit_of_measurement"] = unit
+
+    return selector.NumberSelector(config)
 
 
 class SandiSolarConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -68,10 +107,11 @@ class SandiSolarConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             port_selector = str
             default_port = "/dev/ttyUSB0"
 
-        default_update_interval = str(DEFAULT_SCAN_INTERVAL)
-
-        if default_update_interval not in ["5", "10", "15", "30", "60"]:
-            default_update_interval = "10"
+        default_update_interval = _default_select(
+            DEFAULT_SCAN_INTERVAL,
+            ["5", "10", "15", "30", "60"],
+            "10",
+        )
 
         schema = vol.Schema(
             {
@@ -117,30 +157,57 @@ class SandiSolarOptionsFlow(config_entries.OptionsFlow):
 
         if user_input is not None:
             update_interval = int(user_input["update_interval"])
+            settings_refresh_interval = int(user_input["settings_refresh_interval"])
+            eta_full_real_soc_threshold = float(
+                user_input["eta_full_real_soc_threshold"]
+            )
 
             if update_interval < 5:
                 errors["update_interval"] = "invalid_update_interval"
+
+            if settings_refresh_interval < 10:
+                errors["settings_refresh_interval"] = "invalid_update_interval"
+
+            if eta_full_real_soc_threshold < 90 or eta_full_real_soc_threshold > 100:
+                errors["eta_full_real_soc_threshold"] = "invalid_eta_threshold"
 
             if not errors:
                 return self.async_create_entry(
                     title="",
                     data={
                         "update_interval": update_interval,
+                        "settings_refresh_interval": settings_refresh_interval,
+                        "write_verify_delay": float(user_input["write_verify_delay"]),
+                        "eta_full_real_soc_threshold": eta_full_real_soc_threshold,
+                        "avg_pv_alpha": float(user_input["avg_pv_alpha"]),
+                        "avg_battery_alpha": float(user_input["avg_battery_alpha"]),
+                        "avg_grid_alpha": float(user_input["avg_grid_alpha"]),
+                        "avg_eps_alpha": float(user_input["avg_eps_alpha"]),
                     },
                 )
 
-        current_update_interval = self.entry.options.get(
-            "update_interval",
-            self.entry.data.get(
+        options = self.entry.options
+
+        current_update_interval = _default_select(
+            options.get(
                 "update_interval",
-                DEFAULT_SCAN_INTERVAL,
+                self.entry.data.get("update_interval", DEFAULT_SCAN_INTERVAL),
             ),
+            ["5", "10", "15", "30", "60"],
+            "10",
         )
 
-        current_update_interval = str(current_update_interval)
+        current_settings_refresh_interval = _default_select(
+            options.get("settings_refresh_interval", 30),
+            ["10", "15", "30", "60", "120", "300"],
+            "30",
+        )
 
-        if current_update_interval not in ["5", "10", "15", "30", "60"]:
-            current_update_interval = "10"
+        current_write_verify_delay = _default_select(
+            options.get("write_verify_delay", 0.5),
+            ["0.2", "0.5", "1.0", "2.0"],
+            "0.5",
+        )
 
         schema = vol.Schema(
             {
@@ -152,7 +219,45 @@ class SandiSolarOptionsFlow(config_entries.OptionsFlow):
                         options=UPDATE_INTERVAL_OPTIONS,
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )
-                )
+                ),
+                vol.Required(
+                    "settings_refresh_interval",
+                    default=current_settings_refresh_interval,
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=SETTINGS_REFRESH_INTERVAL_OPTIONS,
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                vol.Required(
+                    "write_verify_delay",
+                    default=current_write_verify_delay,
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=WRITE_VERIFY_DELAY_OPTIONS,
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                vol.Required(
+                    "eta_full_real_soc_threshold",
+                    default=float(options.get("eta_full_real_soc_threshold", 98.0)),
+                ): _number_box(90, 100, 0.5, "%"),
+                vol.Required(
+                    "avg_pv_alpha",
+                    default=float(options.get("avg_pv_alpha", 0.15)),
+                ): _number_box(0.05, 0.80, 0.01),
+                vol.Required(
+                    "avg_battery_alpha",
+                    default=float(options.get("avg_battery_alpha", 0.18)),
+                ): _number_box(0.05, 0.80, 0.01),
+                vol.Required(
+                    "avg_grid_alpha",
+                    default=float(options.get("avg_grid_alpha", 0.25)),
+                ): _number_box(0.05, 0.80, 0.01),
+                vol.Required(
+                    "avg_eps_alpha",
+                    default=float(options.get("avg_eps_alpha", 0.25)),
+                ): _number_box(0.05, 0.80, 0.01),
             }
         )
 

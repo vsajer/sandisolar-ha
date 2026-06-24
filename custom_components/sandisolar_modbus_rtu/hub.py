@@ -59,6 +59,14 @@ class SandiSolarModbusHub:
             "update_interval",
             entry.data.get("update_interval", 10),
         )
+        self.settings_refresh_interval = entry.options.get(
+            "settings_refresh_interval",
+            self.update_interval,
+        )
+        self.write_verify_delay = entry.options.get(
+            "write_verify_delay",
+            0.5,
+        )
 
         self._client: Optional[AsyncModbusSerialClient] = None
         self._lock = asyncio.Lock()

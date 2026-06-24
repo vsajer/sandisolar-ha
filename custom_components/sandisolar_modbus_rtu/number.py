@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import timedelta
 
@@ -280,7 +281,14 @@ class SandiSolarNumber(NumberEntity):
         await self.async_update()
         self.async_write_ha_state()
 
-        interval = int(getattr(self._hub, "update_interval", 10) or 10)
+        interval = int(
+            getattr(
+                self._hub,
+                "settings_refresh_interval",
+                getattr(self._hub, "update_interval", 10),
+            )
+            or 10
+        )
 
         if interval < 5:
             interval = 5
@@ -376,6 +384,8 @@ class SandiSolarNumber(NumberEntity):
 
         # Po zápisu z HA se pokusíme hned přečíst skutečnou hodnotu z měniče.
         # Když se čtení nepovede, zobrazíme alespoň požadovanou hodnotu.
+        await asyncio.sleep(float(getattr(self._hub, "write_verify_delay", 0.5) or 0.5))
+
         real_value = await self._hub.read_holding_register(self._key)
 
         if real_value is not None:

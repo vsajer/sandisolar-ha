@@ -87,9 +87,6 @@ class SandiSolarSelect(SelectEntity):
     """Select entity for SANDISOLAR SD-PRO-EU."""
 
     _attr_has_entity_name = True
-
-    # Polling si řídíme sami přes async_track_time_interval,
-    # aby se změny z LCD měniče pravidelně propsaly do HA.
     _attr_should_poll = False
 
     def __init__(self, hub, key, name, mapping, icon, advanced=False):
@@ -132,11 +129,7 @@ class SandiSolarSelect(SelectEntity):
         return self._unknown_option
 
     async def async_added_to_hass(self):
-        """Read initial value and start periodic refresh.
-
-        This is important because select settings can be changed directly
-        on the inverter LCD.
-        """
+        """Read initial value and start periodic refresh."""
 
         for attempt in range(3):
             await self.async_update()
@@ -148,7 +141,14 @@ class SandiSolarSelect(SelectEntity):
 
         self.async_write_ha_state()
 
-        interval = int(getattr(self._hub, "update_interval", 10) or 10)
+        interval = int(
+            getattr(
+                self._hub,
+                "settings_refresh_interval",
+                getattr(self._hub, "update_interval", 10),
+            )
+            or 10
+        )
 
         if interval < 5:
             interval = 5
@@ -207,7 +207,6 @@ class SandiSolarSelect(SelectEntity):
     async def async_select_option(self, option: str):
         """Write selected option immediately and update local HA state."""
 
-        # Unknown položka je jen diagnostická, tu nezapisujeme.
         if self._unknown_option is not None and option == self._unknown_option:
             _LOGGER.warning(
                 "SANDISOLAR: Refusing to write diagnostic unknown option %s for %s",
@@ -238,8 +237,8 @@ class SandiSolarSelect(SelectEntity):
             self.async_write_ha_state()
             return
 
-        # Po zápisu z HA se pokusíme hned přečíst skutečnou hodnotu z měniče.
-        # Když se čtení nepovede, zobrazíme alespoň požadovanou hodnotu.
+        await asyncio.sleep(float(getattr(self._hub, "write_verify_delay", 0.5) or 0.5))
+
         real_value = await self._hub.read_holding_register(self._key)
 
         if real_value is not None:
@@ -256,7 +255,6 @@ class SandiSolarSelect(SelectEntity):
             "read_error": False,
         }
 
-        # Když měnič vrátí neznámou hodnotu, přidej diagnostickou volbu.
         known_values = [int(v) for v in self._mapping.values()]
 
         if self._state not in known_values:

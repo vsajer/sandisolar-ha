@@ -295,7 +295,9 @@ class SandiSolarSensorCoordinator(DataUpdateCoordinator):
             hass,
             _LOGGER,
             name="SANDISOLAR sensor coordinator",
-            update_interval=SENSOR_UPDATE_INTERVAL,
+            update_interval=timedelta(
+                seconds=int(getattr(hub, "update_interval", 10) or 10)
+            ),
         )
         self.hub = hub
         self.keys = keys
@@ -356,6 +358,30 @@ class BaseSandiSensor(CoordinatorEntity, SensorEntity):
     def _language(self):
         """Return current Home Assistant language."""
         return self.coordinator.hass.config.language or "en"
+
+    def _option_float(self, key: str, default: float) -> float:
+        """Read float option from config entry options."""
+        try:
+            entry = getattr(self.coordinator.hub, "entry", None)
+            if entry is None:
+                return default
+
+            value = entry.options.get(key, default)
+            return float(value)
+        except Exception:
+            return default
+
+    def _option_int(self, key: str, default: int) -> int:
+        """Read integer option from config entry options."""
+        try:
+            entry = getattr(self.coordinator.hub, "entry", None)
+            if entry is None:
+                return default
+
+            value = entry.options.get(key, default)
+            return int(value)
+        except Exception:
+            return default
 
     def _tr_state(self, section: str, code, fallback: str) -> str:
         """Translate state text."""
@@ -483,16 +509,28 @@ class TimedAveragePowerSensor(BaseSandiSensor):
         icon,
         alpha=0.30,
         spike_limit_w=1500,
+        alpha_option_key=None,
     ):
         super().__init__(coordinator, key, name)
 
         self._source = source
         self._attr_icon = icon
         self._alpha = alpha
+        self._alpha_option_key = alpha_option_key
         self._spike_limit_w = spike_limit_w
         self._ema_value = None
         self._last_raw_value = None
         self._samples = 0
+
+    def _current_alpha(self):
+        if self._alpha_option_key is None:
+            return self._alpha
+
+        return _clamp(
+            self._option_float(self._alpha_option_key, self._alpha),
+            0.01,
+            1.0,
+        )
 
     def _source_value(self):
         if self._source == "pv":
@@ -543,9 +581,11 @@ class TimedAveragePowerSensor(BaseSandiSensor):
                 else:
                     value_for_filter = self._last_raw_value - self._spike_limit_w
 
+            alpha = self._current_alpha()
+
             self._ema_value = (
                 self._ema_value
-                + self._alpha * (value_for_filter - self._ema_value)
+                + alpha * (value_for_filter - self._ema_value)
             )
 
             self._last_raw_value = raw_value
@@ -556,7 +596,8 @@ class TimedAveragePowerSensor(BaseSandiSensor):
         self._attr_extra_state_attributes = {
             "source": self._source,
             "filter": "ema",
-            "alpha": self._alpha,
+            "alpha": self._current_alpha(),
+            "alpha_option_key": self._alpha_option_key,
             "samples": self._samples,
             "instant_value": round(raw_value, 1),
             "filtered_value": round(self._ema_value, 1),
@@ -810,6 +851,96 @@ class EpsEnergyHourSensor(BaseSandiSensor):
         }
 
 
+
+class EnergyPerHourSensor(BaseSandiSensor):
+    """Virtual sensor estimating energy change per hour from a total kWh counter."""
+
+    _attr_native_unit_of_measurement = "kWh/h"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(
+        self,
+        coordinator,
+        key,
+        name,
+        source_key,
+        icon,
+        sample_interval_seconds=EPS_ENERGY_SAMPLE_INTERVAL_SECONDS,
+        sample_count=EPS_ENERGY_SAMPLE_COUNT,
+    ):
+        super().__init__(coordinator, key, name)
+
+        self._source_key = source_key
+        self._attr_icon = icon
+        self._sample_interval_seconds = sample_interval_seconds
+        self._sample_count = sample_count
+        self._samples = deque(maxlen=sample_count)
+        self._last_sample_time = None
+
+    def _maybe_add_sample(self, value, now):
+        if value is None:
+            return
+
+        if self._last_sample_time is None:
+            self._samples.append((now, float(value)))
+            self._last_sample_time = now
+            return
+
+        elapsed = (now - self._last_sample_time).total_seconds()
+
+        if elapsed >= self._sample_interval_seconds:
+            self._samples.append((now, float(value)))
+            self._last_sample_time = now
+
+    def _update_from_data(self):
+        now = dt_util.utcnow()
+        total = _safe_float(self._get_value(self._source_key))
+
+        self._maybe_add_sample(total, now)
+
+        if len(self._samples) < 2:
+            self._attr_native_value = None
+            self._attr_extra_state_attributes = {
+                "source_key": self._source_key,
+                "samples": len(self._samples),
+                "max_samples": self._sample_count,
+                "status": "waiting_for_samples",
+            }
+            return
+
+        first_time, first_value = self._samples[0]
+        last_time, last_value = self._samples[-1]
+
+        elapsed_hours = (last_time - first_time).total_seconds() / 3600
+
+        if elapsed_hours <= 0:
+            self._attr_native_value = None
+            return
+
+        diff = last_value - first_value
+
+        # Total increasing counters can reset after firmware restart or counter rollover.
+        # Do not report negative hourly energy.
+        if diff < 0:
+            diff = 0
+
+        energy_per_hour = diff / elapsed_hours
+
+        self._attr_native_value = round(energy_per_hour, 3)
+
+        self._attr_extra_state_attributes = {
+            "source_key": self._source_key,
+            "samples": len(self._samples),
+            "max_samples": self._sample_count,
+            "sample_interval_seconds": self._sample_interval_seconds,
+            "elapsed_minutes": round(elapsed_hours * 60, 1),
+            "energy_difference_kwh": round(diff, 3),
+            "first_total_kwh": round(first_value, 3),
+            "last_total_kwh": round(last_value, 3),
+        }
+
+
+
 class BatteryChargeEtaSensor(BaseSandiSensor):
     """Virtual sensor estimating when battery reaches End of Charge SOC."""
 
@@ -1057,6 +1188,13 @@ class BatteryChargeEtaMinutesSensor(BaseSandiSensor):
 
         return real_soc, lower, lower_source, int(inverter_status)
 
+    def _charged_real_soc_threshold(self):
+        return _clamp(
+            self._option_float("eta_full_real_soc_threshold", 98.0),
+            90.0,
+            100.0,
+        )
+
     def _battery_capacity_ah(self):
         fcc = _safe_float(self._get_value("bms_fcc"), 0)
         manual = self._get_cached_holding("battery_capacity_manual")
@@ -1183,9 +1321,11 @@ class BatteryChargeEtaMinutesSensor(BaseSandiSensor):
             }
             return
 
+        charged_real_soc_threshold = self._charged_real_soc_threshold()
+
         # After Home Assistant restart the in-memory latch is lost.
         # If usable SOC is still almost full, keep the countdown at 0 min.
-        if real_soc >= 98:
+        if real_soc >= charged_real_soc_threshold:
             if self._charged_at is None:
                 self._charged_at = now_local
                 self._charged_date = today
@@ -1199,7 +1339,7 @@ class BatteryChargeEtaMinutesSensor(BaseSandiSensor):
                 "minutes_until_full": 0,
                 "charged_at": self._charged_at.isoformat(),
                 "latched": True,
-                "real_soc_hysteresis_percent": 98,
+                "real_soc_hysteresis_percent": charged_real_soc_threshold,
                 "lower_limit": round(lower_soc, 1),
                 "lower_source": lower_source,
                 "usable_range_percent": round(usable_range, 1),
@@ -1638,10 +1778,18 @@ async def async_setup_entry(hass, entry, async_add_entities):
             "mdi:solar-power",
             alpha=0.15,
             spike_limit_w=1000,
+            alpha_option_key="avg_pv_alpha",
         ),
 
         EnergySensor(coordinator, "pv_energy_today", "PV Energy Today", "mdi:solar-power"),
         EnergySensor(coordinator, "pv_energy_total", "PV Energy Total", "mdi:solar-power"),
+        EnergyPerHourSensor(
+            coordinator,
+            "pv_energy_hour",
+            "PV Energy Hour",
+            "pv_energy_total",
+            "mdi:solar-power",
+        ),
 
         SimpleSensor(coordinator, "battery_voltage", "Battery Voltage",
                      UnitOfElectricPotential.VOLT, SensorDeviceClass.VOLTAGE, "mdi:battery", 1),
@@ -1669,6 +1817,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
             "mdi:battery-sync",
             alpha=0.18,
             spike_limit_w=1000,
+            alpha_option_key="avg_battery_alpha",
         ),
         BatteryPowerSpeedSensor(coordinator, "avg_battery_power_speed", "AVG Battery Power Speed"),
         BatterySocSpeedSensor(coordinator, "battery_soc_speed", "Battery SOC Speed"),
@@ -1699,8 +1848,22 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
         EnergySensor(coordinator, "battery_charge_energy_today", "Battery Charge Energy Today", "mdi:battery-charging"),
         EnergySensor(coordinator, "battery_charge_energy_total", "Battery Charge Energy Total", "mdi:battery-charging"),
+        EnergyPerHourSensor(
+            coordinator,
+            "battery_charge_energy_hour",
+            "Battery Charge Energy Hour",
+            "battery_charge_energy_total",
+            "mdi:battery-charging",
+        ),
         EnergySensor(coordinator, "battery_discharge_energy_today", "Battery Discharge Energy Today", "mdi:battery-minus"),
         EnergySensor(coordinator, "battery_discharge_energy_total", "Battery Discharge Energy Total", "mdi:battery-minus"),
+        EnergyPerHourSensor(
+            coordinator,
+            "battery_discharge_energy_hour",
+            "Battery Discharge Energy Hour",
+            "battery_discharge_energy_total",
+            "mdi:battery-minus",
+        ),
 
         SimpleSensor(coordinator, "grid_voltage", "Grid Voltage",
                      UnitOfElectricPotential.VOLT, SensorDeviceClass.VOLTAGE, "mdi:transmission-tower", 1),
@@ -1718,6 +1881,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
             "mdi:transmission-tower",
             alpha=0.25,
             spike_limit_w=1500,
+            alpha_option_key="avg_grid_alpha",
         ),
 
         EnergySensor(coordinator, "grid_in_energy_today", "Grid Import Energy Today", "mdi:transmission-tower-import"),
@@ -1747,6 +1911,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
             "mdi:home-lightning-bolt",
             alpha=0.25,
             spike_limit_w=1500,
+            alpha_option_key="avg_eps_alpha",
         ),
         EpsEnergyHourSensor(coordinator, "eps_energy_hour", "EPS Energy Hour"),
         SimpleSensor(coordinator, "eps_active_power", "EPS Active Power",

@@ -2,69 +2,75 @@
   "states": {
     "inverter_status": {
       "0": "Čakanie",
-      "1": "Režim siete",
+      "1": "Sieťový režim",
       "2": "Ostrovný režim",
       "3": "Porucha",
       "4": "Aktualizácia / blikanie",
       "5": "Bypass",
-      "6": "Samonabíjanie"
+      "6": "Vlastné nabíjanie"
     },
     "battery_status": {
-      "0": "Normálny",
+      "0": "Normálny stav",
       "1": "Nabíjanie",
       "2": "Vybíjanie",
-      "3": "Pohotovosť"
+      "3": "Pohotovostný režim"
     },
     "fault_word0": {
-      "0": "No fault",
-      "103": "Inverter DC offset is too high",
-      "105": "Bypass AC output is overloaded",
-      "200": "Off-grid output voltage is too low",
-      "201": "Off-grid output voltage is too high",
-      "202": "Off-grid output has a short circuit",
-      "203": "Off-grid output is overloaded",
-      "204": "Abnormal off-grid output DC component offset",
-      "301": "Battery open circuit",
-      "305": "Battery overvoltage",
-      "306": "Battery overcurrent",
-      "307": "Battery communication fault",
-      "308": "BMS fault",
-      "400": "PV overvoltage",
-      "403": "PV short circuit",
-      "404": "PV reverse connection",
-      "500": "Abnormal BUS voltage",
-      "501": "Abnormal BUS voltage sampling",
-      "502": "Abnormal internal communication",
-      "505": "Temperature sensor connection fault",
-      "506": "Device over-temperature",
-      "507": "Relay fault",
-      "509": "Anti-backflow output timeout",
-      "510": "Software version mismatch",
-      "511": "Fan fault",
-      "513": "Parallel operation fault"
+      "0": "Bez poruchy",
+      "103": "DC offset meniča je príliš vysoký",
+      "105": "Bypass AC výstup je preťažený",
+      "200": "Výstupné napätie v ostrovnom režime je príliš nízke",
+      "201": "Výstupné napätie v ostrovnom režime je príliš vysoké",
+      "202": "Skrat na výstupe v ostrovnom režime",
+      "203": "Výstup v ostrovnom režime je preťažený",
+      "204": "Abnormálna DC zložka na výstupe v ostrovnom režime",
+      "301": "Batéria je odpojená",
+      "305": "Prepätie batérie",
+      "306": "Nadprúd batérie",
+      "307": "Chyba komunikácie s batériou",
+      "308": "Porucha BMS",
+      "400": "Prepätie FV vstupu",
+      "403": "Skrat FV vstupu",
+      "404": "Obrátená polarita FV vstupu",
+      "500": "Abnormálne napätie DC zbernice",
+      "501": "Chyba merania napätia DC zbernice",
+      "502": "Chyba vnútornej komunikácie zariadenia",
+      "505": "Chyba pripojenia teplotného snímača",
+      "506": "Prehriatie zariadenia",
+      "507": "Chyba relé",
+      "509": "Timeout ochrany proti spätnému toku",
+      "510": "Nezhodná verzia softvéru",
+      "511": "Chyba ventilátora",
+      "513": "Chyba paralelnej prevádzky"
     },
     "warning_main": {
       "0": "OK",
-      "103": "Grid unavailable",
-      "104": "Grid voltage out of range",
-      "105": "Grid frequency out of range",
-      "106": "No output voltage from generator",
-      "107": "Generator output voltage out of range",
-      "108": "Generator output frequency out of range",
-      "302": "Low battery",
-      "304": "Abnormal BMS information",
-      "305": "Low battery voltage alarm",
-      "502": "Memory read/write error"
+      "103": "Sieť nie je dostupná",
+      "104": "Napätie siete je mimo rozsah",
+      "105": "Frekvencia siete je mimo rozsah",
+      "106": "Generátor nemá výstupné napätie",
+      "107": "Výstupné napätie generátora je mimo rozsah",
+      "108": "Výstupná frekvencia generátora je mimo rozsah",
+      "302": "Nízky stav batérie",
+      "304": "Neplatné informácie z BMS",
+      "305": "Alarm nízkeho napätia batérie",
+      "502": "Chyba čítania/zápisu pamäte"
     },
     "warning_sub": {
-      "0": "Bez varovania"
+      "0": "Bez upozornenia"
+    },
+    "battery_eta": {
+      "waiting": "čakám na výpočet",
+      "not_today": "dnes nebude",
+      "will_be_full_at": "Bude nabité o {time}",
+      "was_full_at": "Bolo nabité o {time}"
     },
     "unknown": {
-      "fault_code": "Unknown fault code",
-      "warning_code": "Unknown warning code",
-      "sub_warning_code": "Unknown sub-warning code",
-      "battery_status": "Unknown BMS status",
-      "inverter_status": "Unknown inverter status"
+      "fault_code": "Neznámy kód poruchy",
+      "warning_code": "Neznámy kód varovania",
+      "sub_warning_code": "Neznámy kód podvarovania",
+      "battery_status": "Neznámy stav BMS",
+      "inverter_status": "Neznámy stav meniča"
     }
   }
 }

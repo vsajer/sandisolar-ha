@@ -1,70 +1,76 @@
 {
   "states": {
     "inverter_status": {
-      "0": "Wartet",
+      "0": "Warten",
       "1": "Netzbetrieb",
       "2": "Inselbetrieb",
       "3": "Fehler",
-      "4": "Flashen",
+      "4": "Aktualisierung / Blinken",
       "5": "Bypass",
       "6": "Selbstladung"
     },
     "battery_status": {
       "0": "Normal",
-      "1": "Lädt",
-      "2": "Entlädt",
-      "3": "Bereitschaft"
+      "1": "Laden",
+      "2": "Entladen",
+      "3": "Standby"
     },
     "fault_word0": {
-      "0": "No fault",
-      "103": "Inverter DC offset is too high",
-      "105": "Bypass AC output is overloaded",
-      "200": "Off-grid output voltage is too low",
-      "201": "Off-grid output voltage is too high",
-      "202": "Off-grid output has a short circuit",
-      "203": "Off-grid output is overloaded",
-      "204": "Abnormal off-grid output DC component offset",
-      "301": "Battery open circuit",
-      "305": "Battery overvoltage",
-      "306": "Battery overcurrent",
-      "307": "Battery communication fault",
-      "308": "BMS fault",
-      "400": "PV overvoltage",
-      "403": "PV short circuit",
-      "404": "PV reverse connection",
-      "500": "Abnormal BUS voltage",
-      "501": "Abnormal BUS voltage sampling",
-      "502": "Abnormal internal communication",
-      "505": "Temperature sensor connection fault",
-      "506": "Device over-temperature",
-      "507": "Relay fault",
-      "509": "Anti-backflow output timeout",
-      "510": "Software version mismatch",
-      "511": "Fan fault",
-      "513": "Parallel operation fault"
+      "0": "Kein Fehler",
+      "103": "DC-Offset des Wechselrichters ist zu hoch",
+      "105": "Bypass-AC-Ausgang ist überlastet",
+      "200": "Ausgangsspannung im Inselbetrieb ist zu niedrig",
+      "201": "Ausgangsspannung im Inselbetrieb ist zu hoch",
+      "202": "Kurzschluss am Ausgang im Inselbetrieb",
+      "203": "Ausgang im Inselbetrieb ist überlastet",
+      "204": "Abnormale DC-Komponente am Ausgang im Inselbetrieb",
+      "301": "Batteriekreis offen",
+      "305": "Batterieüberspannung",
+      "306": "Batterieüberstrom",
+      "307": "Kommunikationsfehler mit der Batterie",
+      "308": "BMS-Fehler",
+      "400": "PV-Überspannung",
+      "403": "PV-Kurzschluss",
+      "404": "PV-Verpolung",
+      "500": "Abnormale DC-Busspannung",
+      "501": "Fehler bei der Messung der DC-Busspannung",
+      "502": "Interner Kommunikationsfehler des Geräts",
+      "505": "Fehler beim Anschluss des Temperatursensors",
+      "506": "Gerät überhitzt",
+      "507": "Relaisfehler",
+      "509": "Zeitüberschreitung des Rückspeiseschutzes",
+      "510": "Softwareversion stimmt nicht überein",
+      "511": "Lüfterfehler",
+      "513": "Fehler im Parallelbetrieb"
     },
     "warning_main": {
       "0": "OK",
-      "103": "Grid unavailable",
-      "104": "Grid voltage out of range",
-      "105": "Grid frequency out of range",
-      "106": "No output voltage from generator",
-      "107": "Generator output voltage out of range",
-      "108": "Generator output frequency out of range",
-      "302": "Low battery",
-      "304": "Abnormal BMS information",
-      "305": "Low battery voltage alarm",
-      "502": "Memory read/write error"
+      "103": "Netz nicht verfügbar",
+      "104": "Netzspannung außerhalb des Bereichs",
+      "105": "Netzfrequenz außerhalb des Bereichs",
+      "106": "Keine Ausgangsspannung vom Generator",
+      "107": "Generator-Ausgangsspannung außerhalb des Bereichs",
+      "108": "Generator-Ausgangsfrequenz außerhalb des Bereichs",
+      "302": "Niedriger Batteriestand",
+      "304": "Abnormale BMS-Informationen",
+      "305": "Alarm bei niedriger Batteriespannung",
+      "502": "Speicher-Lese-/Schreibfehler"
     },
     "warning_sub": {
       "0": "Keine Warnung"
     },
+    "battery_eta": {
+      "waiting": "Warte auf Berechnung",
+      "not_today": "Heute nicht",
+      "will_be_full_at": "Voll um {time}",
+      "was_full_at": "War voll um {time}"
+    },
     "unknown": {
-      "fault_code": "Unknown fault code",
-      "warning_code": "Unknown warning code",
-      "sub_warning_code": "Unknown sub-warning code",
-      "battery_status": "Unknown BMS status",
-      "inverter_status": "Unknown inverter status"
+      "fault_code": "Unbekannter Fehlercode",
+      "warning_code": "Unbekannter Warncode",
+      "sub_warning_code": "Unbekannter Unterwarncode",
+      "battery_status": "Unbekannter BMS-Status",
+      "inverter_status": "Unbekannter Wechselrichterstatus"
     }
   }
 }

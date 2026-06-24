@@ -5,7 +5,7 @@
       "1": "Grid mode",
       "2": "Off-grid mode",
       "3": "Fault",
-      "4": "Flashing",
+      "4": "Flashing / update",
       "5": "Bypass",
       "6": "Self-charging"
     },
@@ -58,6 +58,12 @@
     },
     "warning_sub": {
       "0": "No warning"
+    },
+    "battery_eta": {
+      "waiting": "Waiting for calculation",
+      "not_today": "Not today",
+      "will_be_full_at": "Will be full at {time}",
+      "was_full_at": "Was full at {time}"
     },
     "unknown": {
       "fault_code": "Unknown fault code",

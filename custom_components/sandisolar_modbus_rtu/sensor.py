@@ -25,6 +25,7 @@ from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
 )
 from homeassistant.util import dt as dt_util
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import DOMAIN
 
@@ -770,7 +771,7 @@ class BatterySocSpeedSensor(BaseSandiSensor):
         }
 
 
-class EpsEnergyHourSensor(BaseSandiSensor):
+class EpsEnergyHourSensor(BaseSandiSensor, RestoreEntity):
     """Virtual sensor estimating EPS energy consumption per hour."""
 
     _attr_native_unit_of_measurement = "kWh/h"
@@ -791,6 +792,32 @@ class EpsEnergyHourSensor(BaseSandiSensor):
         self._sample_count = sample_count
         self._samples = deque(maxlen=sample_count)
         self._last_sample_time = None
+        self._last_calculated_value = None
+
+    async def async_added_to_hass(self):
+        """Restore last calculated value after Home Assistant restart."""
+        await super().async_added_to_hass()
+
+        if self._attr_native_value is not None:
+            return
+
+        last_state = await self.async_get_last_state()
+
+        if last_state is None or last_state.state in ("unknown", "unavailable", None):
+            return
+
+        try:
+            self._last_calculated_value = float(last_state.state)
+            self._attr_native_value = self._last_calculated_value
+            self._attr_extra_state_attributes = {
+                "status": "restored_until_new_samples",
+                "restored": True,
+                "samples": len(self._samples),
+                "max_samples": self._sample_count,
+            }
+            self.async_write_ha_state()
+        except (TypeError, ValueError):
+            return
 
     def _maybe_add_sample(self, value, now):
         if value is None:
@@ -811,14 +838,25 @@ class EpsEnergyHourSensor(BaseSandiSensor):
         now = dt_util.utcnow()
         total = _safe_float(self._get_value("eps_energy_total"))
 
-        self._maybe_add_sample(total, now)
-
-        if len(self._samples) < 2:
-            self._attr_native_value = None
+        if total is None:
+            self._attr_native_value = self._last_calculated_value
             self._attr_extra_state_attributes = {
                 "samples": len(self._samples),
                 "max_samples": self._sample_count,
-                "status": "waiting_for_samples",
+                "status": "source_unavailable_keep_last",
+                "restored_or_last_value": self._last_calculated_value,
+            }
+            return
+
+        self._maybe_add_sample(total, now)
+
+        if len(self._samples) < 2:
+            self._attr_native_value = self._last_calculated_value
+            self._attr_extra_state_attributes = {
+                "samples": len(self._samples),
+                "max_samples": self._sample_count,
+                "status": "waiting_for_samples_keep_last",
+                "restored_or_last_value": self._last_calculated_value,
             }
             return
 
@@ -828,7 +866,7 @@ class EpsEnergyHourSensor(BaseSandiSensor):
         elapsed_hours = (last_time - first_time).total_seconds() / 3600
 
         if elapsed_hours <= 0:
-            self._attr_native_value = None
+            self._attr_native_value = self._last_calculated_value
             return
 
         diff = last_value - first_value
@@ -838,7 +876,8 @@ class EpsEnergyHourSensor(BaseSandiSensor):
 
         energy_per_hour = diff / elapsed_hours
 
-        self._attr_native_value = round(energy_per_hour, 3)
+        self._last_calculated_value = round(energy_per_hour, 3)
+        self._attr_native_value = self._last_calculated_value
 
         self._attr_extra_state_attributes = {
             "samples": len(self._samples),
@@ -851,8 +890,7 @@ class EpsEnergyHourSensor(BaseSandiSensor):
         }
 
 
-
-class EnergyPerHourSensor(BaseSandiSensor):
+class EnergyPerHourSensor(BaseSandiSensor, RestoreEntity):
     """Virtual sensor estimating energy change per hour from a total kWh counter."""
 
     _attr_native_unit_of_measurement = "kWh/h"
@@ -876,6 +914,33 @@ class EnergyPerHourSensor(BaseSandiSensor):
         self._sample_count = sample_count
         self._samples = deque(maxlen=sample_count)
         self._last_sample_time = None
+        self._last_calculated_value = None
+
+    async def async_added_to_hass(self):
+        """Restore last calculated value after Home Assistant restart."""
+        await super().async_added_to_hass()
+
+        if self._attr_native_value is not None:
+            return
+
+        last_state = await self.async_get_last_state()
+
+        if last_state is None or last_state.state in ("unknown", "unavailable", None):
+            return
+
+        try:
+            self._last_calculated_value = float(last_state.state)
+            self._attr_native_value = self._last_calculated_value
+            self._attr_extra_state_attributes = {
+                "source_key": self._source_key,
+                "status": "restored_until_new_samples",
+                "restored": True,
+                "samples": len(self._samples),
+                "max_samples": self._sample_count,
+            }
+            self.async_write_ha_state()
+        except (TypeError, ValueError):
+            return
 
     def _maybe_add_sample(self, value, now):
         if value is None:
@@ -896,15 +961,27 @@ class EnergyPerHourSensor(BaseSandiSensor):
         now = dt_util.utcnow()
         total = _safe_float(self._get_value(self._source_key))
 
-        self._maybe_add_sample(total, now)
-
-        if len(self._samples) < 2:
-            self._attr_native_value = None
+        if total is None:
+            self._attr_native_value = self._last_calculated_value
             self._attr_extra_state_attributes = {
                 "source_key": self._source_key,
                 "samples": len(self._samples),
                 "max_samples": self._sample_count,
-                "status": "waiting_for_samples",
+                "status": "source_unavailable_keep_last",
+                "restored_or_last_value": self._last_calculated_value,
+            }
+            return
+
+        self._maybe_add_sample(total, now)
+
+        if len(self._samples) < 2:
+            self._attr_native_value = self._last_calculated_value
+            self._attr_extra_state_attributes = {
+                "source_key": self._source_key,
+                "samples": len(self._samples),
+                "max_samples": self._sample_count,
+                "status": "waiting_for_samples_keep_last",
+                "restored_or_last_value": self._last_calculated_value,
             }
             return
 
@@ -914,19 +991,18 @@ class EnergyPerHourSensor(BaseSandiSensor):
         elapsed_hours = (last_time - first_time).total_seconds() / 3600
 
         if elapsed_hours <= 0:
-            self._attr_native_value = None
+            self._attr_native_value = self._last_calculated_value
             return
 
         diff = last_value - first_value
 
-        # Total increasing counters can reset after firmware restart or counter rollover.
-        # Do not report negative hourly energy.
         if diff < 0:
             diff = 0
 
         energy_per_hour = diff / elapsed_hours
 
-        self._attr_native_value = round(energy_per_hour, 3)
+        self._last_calculated_value = round(energy_per_hour, 3)
+        self._attr_native_value = self._last_calculated_value
 
         self._attr_extra_state_attributes = {
             "source_key": self._source_key,
@@ -938,7 +1014,6 @@ class EnergyPerHourSensor(BaseSandiSensor):
             "first_total_kwh": round(first_value, 3),
             "last_total_kwh": round(last_value, 3),
         }
-
 
 
 class BatteryChargeEtaSensor(BaseSandiSensor):

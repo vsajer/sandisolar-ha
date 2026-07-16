@@ -8,5 +8,5 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/vsajer/sandisolar-ha/issues",
   "requirements": ["pymodbus"],
-  "version": "8.9.0"
+  "version": "9.1.0"
 }

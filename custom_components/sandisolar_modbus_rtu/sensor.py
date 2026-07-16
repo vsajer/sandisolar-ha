@@ -1397,6 +1397,7 @@ class BatteryChargeEtaMinutesSensor(BaseSandiSensor):
             return
 
         charged_real_soc_threshold = self._charged_real_soc_threshold()
+        charged_reset_threshold = max(0, charged_real_soc_threshold - 5)
 
         # After Home Assistant restart the in-memory latch is lost.
         # If usable SOC is still almost full, keep the countdown at 0 min.
@@ -1415,6 +1416,7 @@ class BatteryChargeEtaMinutesSensor(BaseSandiSensor):
                 "charged_at": self._charged_at.isoformat(),
                 "latched": True,
                 "real_soc_hysteresis_percent": charged_real_soc_threshold,
+                "charged_reset_threshold": round(charged_reset_threshold, 1),
                 "lower_limit": round(lower_soc, 1),
                 "lower_source": lower_source,
                 "usable_range_percent": round(usable_range, 1),
@@ -1422,9 +1424,37 @@ class BatteryChargeEtaMinutesSensor(BaseSandiSensor):
             }
             return
 
-        # Under charged band, clear latch and calculate ETA again.
-        self._charged_at = None
-        self._charged_date = None
+        # If the battery was already marked as charged today, keep ETA at 0
+        # until usable SOC drops clearly below the charged band.
+        # This prevents repeated 0 / 999 / 0 jumps after charging stops
+        # or when charging power briefly falls to zero.
+        if (
+            self._charged_at is not None
+            and self._charged_date == today
+            and real_soc >= charged_reset_threshold
+        ):
+            self._attr_native_value = 0
+            self._attr_extra_state_attributes = {
+                "status": "charged_latched",
+                "target_soc": round(target, 1),
+                "current_soc": round(soc, 1),
+                "battery_soc_real": round(real_soc, 1),
+                "minutes_until_full": 0,
+                "charged_at": self._charged_at.isoformat(),
+                "latched": True,
+                "real_soc_hysteresis_percent": charged_real_soc_threshold,
+                "charged_reset_threshold": round(charged_reset_threshold, 1),
+                "lower_limit": round(lower_soc, 1),
+                "lower_source": lower_source,
+                "usable_range_percent": round(usable_range, 1),
+                "inverter_status": inverter_status,
+            }
+            return
+
+        # Reset charged latch only after a meaningful usable SOC drop.
+        if real_soc < charged_reset_threshold:
+            self._charged_at = None
+            self._charged_date = None
 
         speed, capacity_ah, capacity_source, avg_power = self._battery_power_speed()
 

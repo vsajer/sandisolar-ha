@@ -20,8 +20,8 @@ _LOGGER = logging.getLogger(__name__)
 
 DEFAULT_BATTERY_CAPACITY_AH = 316
 
-# Read-only until verified against actual AO-6KSL-G3 firmware.
-SEC_EPS_UNVERIFIED_KEYS = {
+# Modbus addresses for SecEPS settings; validated before each write.
+SEC_EPS_KEYS = {
     "sec_eps_on_soc": 219,
     "sec_eps_off_soc": 221,
     "sec_eps_on_vbat": 220,
@@ -334,14 +334,13 @@ class SandiSolarNumber(NumberEntity):
 
         self._attr_available = True
         self._state = self._normalize_value(val)
-        if self._key in SEC_EPS_UNVERIFIED_KEYS:
+        if self._key in SEC_EPS_KEYS:
             self._attr_extra_state_attributes = {
-                "raw_register_address": SEC_EPS_UNVERIFIED_KEYS[self._key],
-                "decoded_value_unverified": self._state,
-                "write_blocked": True,
-                "reason": "SecEPS mapping conflicts with AOHAI live values",
+                "modbus_register_address": SEC_EPS_KEYS[self._key],
+                "write_enabled": True,
+                "note": "Check actual device value before changing SecEPS thresholds",
             }
-            if self._key.endswith("_soc"):
+            if self._key.endswith("_soc") and not _is_sane_soc(self._state):
                 self._attr_available = False
 
     def _validate_before_write(self, write_value: float) -> bool:
@@ -384,14 +383,15 @@ class SandiSolarNumber(NumberEntity):
         # Škálování řeší hub / modbus_map.py, sem posíláme hodnotu v HA jednotkách.
         write_value = round(float(value), 3)
 
-        if self._key in SEC_EPS_UNVERIFIED_KEYS:
-            _LOGGER.error(
-                "SANDISOLAR: SecEPS write blocked for %s (register %s): mapping not verified",
-                self._key, SEC_EPS_UNVERIFIED_KEYS[self._key],
-            )
-            self._attr_available = False
-            self.async_write_ha_state()
-            return
+        if self._key in SEC_EPS_KEYS:
+            # Never write values outside the declared device/HA range.
+            if not self._attr_native_min_value <= write_value <= self._attr_native_max_value:
+                _LOGGER.error("SANDISOLAR: Refusing out-of-range SecEPS write %s=%s", self._key, write_value)
+                return
+            # Do not write a SOC threshold if its current raw interpretation is invalid.
+            if self._key.endswith("_soc") and not _is_sane_soc(self._hub.get_cached(self._key)):
+                _LOGGER.error("SANDISOLAR: Refusing SecEPS SOC write %s: current reading is invalid", self._key)
+                return
 
         if not self._validate_before_write(write_value):
             self.async_write_ha_state()

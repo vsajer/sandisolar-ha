@@ -153,6 +153,7 @@ SENSOR_KEYS = [
     "grid_current",
     "grid_frequency",
     "grid_power",
+    "parallel_grid_power",
     "inverter_ac_voltage",
     "inverter_ac_current",
     "grid_power_factor",
@@ -459,6 +460,60 @@ class SimpleSensor(BaseSandiSensor):
         )
 
 
+class ParallelGridPowerSensor(BaseSandiSensor):
+    """Direct signed grid power from Input 458-459; single-unit support unverified."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
+    _attr_icon = "mdi:transmission-tower"
+
+    def _update_from_data(self):
+        value = _safe_float(self._get_value("parallel_grid_power"))
+        self._attr_native_value = round(value, 1) if value is not None else None
+        self._attr_extra_state_attributes = {
+            "modbus_function": 4,
+            "modbus_registers": "458-459",
+            "data_type": "sint32",
+            "scale": 0.1,
+            "positive_direction": "import_from_grid",
+            "negative_direction": "export_to_grid",
+            "verification": "Not yet verified on single AO-6KSL-G3 inverter",
+            "source": "Modbus RTU Protocol V2.14",
+        }
+
+
+class GridPowerSensor(BaseSandiSensor):
+    """Estimated AC input consumption; register 328 is exposed separately."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
+    _attr_icon = "mdi:transmission-tower-import"
+
+    def _update_from_data(self):
+        voltage = _safe_float(self._get_value("grid_voltage"))
+        current = _safe_float(self._get_value("grid_current"))
+        pf = _safe_float(self._get_value("grid_power_factor"))
+        status = self._get_value("inverter_status")
+        self._attr_extra_state_attributes = {
+            "measurement_type": "estimated_ac_input_power",
+            "calculation": "grid_voltage * abs(grid_current) * abs(grid_power_factor)",
+            "modbus_register_328_raw_w": self._get_value("grid_power"),
+            "warning": "Estimate, not a directional import/export meter; do not integrate for billing",
+        }
+        if status is None or voltage is None or current is None or pf is None:
+            self._attr_native_value = None
+        elif not (0 <= voltage <= 300 and -1 <= pf <= 1):
+            self._attr_native_value = None
+        elif int(status) == 2 and voltage < 30:
+            self._attr_native_value = 0
+        elif int(status) in (1, 5, 6) and voltage > 100:
+            self._attr_native_value = round(voltage * abs(current) * abs(pf))
+        else:
+            self._attr_native_value = None
+
+
 class GridPowerEstimateSensor(BaseSandiSensor):
     """Estimate grid consumption from AC RMS readings, not a meter reading."""
 
@@ -597,7 +652,17 @@ class TimedAveragePowerSensor(BaseSandiSensor):
             return self._get_value("pv_power_total")
 
         if self._source == "grid":
-            return self._get_value("grid_power")
+            voltage = _safe_float(self._get_value("grid_voltage"))
+            current = _safe_float(self._get_value("grid_current"))
+            pf = _safe_float(self._get_value("grid_power_factor"))
+            status = self._get_value("inverter_status")
+            if voltage is None or current is None or pf is None or status is None:
+                return None
+            if int(status) == 2 and voltage < 30:
+                return 0
+            if int(status) in (1, 5, 6) and 100 < voltage <= 300 and -1 <= pf <= 1:
+                return voltage * abs(current) * abs(pf)
+            return None
 
         if self._source == "eps":
             return self._get_value("eps_power")
@@ -2134,8 +2199,10 @@ async def async_setup_entry(hass, entry, async_add_entities):
                      UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT, "mdi:transmission-tower", 1),
         SimpleSensor(coordinator, "grid_frequency", "Grid Frequency",
                      UnitOfFrequency.HERTZ, SensorDeviceClass.FREQUENCY, "mdi:sine-wave", 2),
-        SimpleSensor(coordinator, "grid_power", "Grid Power",
-                     UnitOfPower.WATT, SensorDeviceClass.POWER, "mdi:transmission-tower", 0),
+        GridPowerSensor(coordinator, "grid_power", "Grid Power"),
+        SimpleSensor(coordinator, "grid_power_raw", "Grid Power Register 328 Raw",
+                     UnitOfPower.WATT, SensorDeviceClass.POWER, "mdi:transmission-tower-export", 0),
+        ParallelGridPowerSensor(coordinator, "parallel_grid_power", "Grid Power Direct Register 458"),
         SimpleSensor(coordinator, "grid_power_factor", "Grid Power Factor",
                      None, None, "mdi:cosine-wave", 4),
         GridPowerEstimateSensor(coordinator, "grid_active_power_estimate", "Grid Active Power Estimate"),

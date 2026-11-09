@@ -40,6 +40,9 @@ INPUT_REGISTERS = {
     "grid_frequency": RegisterDef(51, 0.01),
     # V2.14: 328 is power TO grid (export), not grid import.
     "grid_power": RegisterDef(328, 0.1, count=2),
+    "grid_power_raw": RegisterDef(328, 0.1, count=2),
+    # V2.14 Input 458-459: signed parallel grid power, positive import / negative export.
+    "parallel_grid_power": RegisterDef(458, 0.1, count=2, signed=True),
     "inverter_ac_voltage": RegisterDef(2, 0.1),
     "inverter_ac_current": RegisterDef(5, 0.1, signed=True),
     "grid_power_factor": RegisterDef(52, 0.0001, signed=True),

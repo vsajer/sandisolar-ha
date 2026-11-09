@@ -381,3 +381,8 @@ If this integration helped you:
 - 🌍 Improve translations and documentation
 
 Pull requests are welcome.
+
+
+### Direct grid power diagnostic (v9.2.3)
+
+Input registers 458–459 provide signed `sdwParallelGridPower` (0.1 W; positive = grid import, negative = grid export) per protocol V2.14. Exposed as `Grid Power Direct Register 458` for verification on a single AO-6KSL-G3. Existing `Grid Power` remains an estimate until validated.

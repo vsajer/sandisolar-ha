@@ -20,6 +20,14 @@ _LOGGER = logging.getLogger(__name__)
 
 DEFAULT_BATTERY_CAPACITY_AH = 316
 
+# Read-only until verified against actual AO-6KSL-G3 firmware.
+SEC_EPS_UNVERIFIED_KEYS = {
+    "sec_eps_on_soc": 219,
+    "sec_eps_off_soc": 221,
+    "sec_eps_on_vbat": 220,
+    "sec_eps_off_vbat": 222,
+}
+
 
 def _is_sane_soc(value) -> bool:
     """Return True only for realistic SOC values."""
@@ -256,6 +264,7 @@ class SandiSolarNumber(NumberEntity):
             self._attr_entity_registry_enabled_default = False
 
         self._state = None
+        self._attr_extra_state_attributes = {}
 
     @property
     def device_info(self):
@@ -325,6 +334,15 @@ class SandiSolarNumber(NumberEntity):
 
         self._attr_available = True
         self._state = self._normalize_value(val)
+        if self._key in SEC_EPS_UNVERIFIED_KEYS:
+            self._attr_extra_state_attributes = {
+                "raw_register_address": SEC_EPS_UNVERIFIED_KEYS[self._key],
+                "decoded_value_unverified": self._state,
+                "write_blocked": True,
+                "reason": "SecEPS mapping conflicts with AOHAI live values",
+            }
+            if self._key.endswith("_soc"):
+                self._attr_available = False
 
     def _validate_before_write(self, write_value: float) -> bool:
         """Validate value before writing to inverter."""
@@ -365,6 +383,15 @@ class SandiSolarNumber(NumberEntity):
         # Hodnota z HA může přijít jako float i u kroku 1.
         # Škálování řeší hub / modbus_map.py, sem posíláme hodnotu v HA jednotkách.
         write_value = round(float(value), 3)
+
+        if self._key in SEC_EPS_UNVERIFIED_KEYS:
+            _LOGGER.error(
+                "SANDISOLAR: SecEPS write blocked for %s (register %s): mapping not verified",
+                self._key, SEC_EPS_UNVERIFIED_KEYS[self._key],
+            )
+            self._attr_available = False
+            self.async_write_ha_state()
+            return
 
         if not self._validate_before_write(write_value):
             self.async_write_ha_state()

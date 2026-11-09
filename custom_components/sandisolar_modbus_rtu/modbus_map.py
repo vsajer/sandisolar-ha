@@ -38,7 +38,15 @@ INPUT_REGISTERS = {
     "grid_voltage": RegisterDef(42, 0.1),
     "grid_current": RegisterDef(43, 0.1, signed=True),
     "grid_frequency": RegisterDef(51, 0.01),
-    "grid_power": RegisterDef(328, 0.1, count=2, signed=True),
+    # V2.14: 328 is power TO grid (export), not grid import.
+    "grid_power": RegisterDef(328, 0.1, count=2),
+    "inverter_ac_voltage": RegisterDef(2, 0.1),
+    "inverter_ac_current": RegisterDef(5, 0.1, signed=True),
+    "grid_power_factor": RegisterDef(52, 0.0001, signed=True),
+    "inverter_output_apparent_power": RegisterDef(284, 0.1, count=2),
+    "inverter_output_active_power": RegisterDef(286, 0.1, count=2, signed=True),
+    "inverter_output_reactive_power": RegisterDef(288, 0.1, count=2, signed=True),
+    "power_to_user_total": RegisterDef(320, 0.1, count=2),
 
     "eps_voltage": RegisterDef(55, 0.1),
     "eps_current": RegisterDef(56, 0.1),

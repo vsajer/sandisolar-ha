@@ -153,6 +153,13 @@ SENSOR_KEYS = [
     "grid_current",
     "grid_frequency",
     "grid_power",
+    "inverter_ac_voltage",
+    "inverter_ac_current",
+    "grid_power_factor",
+    "inverter_output_apparent_power",
+    "inverter_output_active_power",
+    "inverter_output_reactive_power",
+    "power_to_user_total",
     "grid_in_energy_today",
     "grid_in_energy_total",
     "grid_out_energy_today",
@@ -450,6 +457,54 @@ class SimpleSensor(BaseSandiSensor):
         self._attr_native_value = (
             int(val) if self._decimals == 0 else round(val, self._decimals)
         )
+
+
+class GridPowerEstimateSensor(BaseSandiSensor):
+    """Estimate grid consumption from AC RMS readings, not a meter reading."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
+    _attr_icon = "mdi:transmission-tower-import"
+
+    def _update_from_data(self):
+        voltage = _safe_float(self._get_value("grid_voltage"))
+        current = _safe_float(self._get_value("grid_current"))
+        pf = _safe_float(self._get_value("grid_power_factor"))
+        status = self._get_value("inverter_status")
+        if (voltage is None or current is None or pf is None
+                or status is None or int(status) != 1
+                or not 0 <= voltage <= 300 or not -1 <= pf <= 1):
+            self._attr_native_value = None
+            return
+        self._attr_native_value = round(voltage * abs(current) * abs(pf))
+        self._attr_extra_state_attributes = {
+            "calculation": "grid_voltage * abs(grid_current) * abs(grid_power_factor)",
+            "warning": "Estimate only; not verified import/export direction or energy meter",
+            "not_for_energy_dashboard": True,
+        }
+
+
+class GridApparentEstimateSensor(BaseSandiSensor):
+    """Estimate apparent grid power from RMS voltage and current."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfApparentPower.VOLT_AMPERE
+    _attr_icon = "mdi:transmission-tower"
+
+    def _update_from_data(self):
+        voltage = _safe_float(self._get_value("grid_voltage"))
+        current = _safe_float(self._get_value("grid_current"))
+        status = self._get_value("inverter_status")
+        if (voltage is None or current is None or status is None
+                or int(status) != 1 or not 0 <= voltage <= 300):
+            self._attr_native_value = None
+            return
+        self._attr_native_value = round(voltage * abs(current))
+        self._attr_extra_state_attributes = {
+            "calculation": "grid_voltage * abs(grid_current)",
+            "warning": "Estimate only; direction not determined",
+        }
 
 
 class EnergySensor(BaseSandiSensor):
@@ -1739,13 +1794,13 @@ class FaultHistorySensor(BaseSandiSensor, RestoreEntity):
         self._last_fault = None
 
     async def async_added_to_hass(self):
-        await super().async_added_to_hass()
         previous = await self.async_get_last_state()
         if previous:
-            for event in previous.attributes.get("events", []):
+            for event in reversed(previous.attributes.get("events", [])):
                 if isinstance(event, dict):
-                    self._history.append(event)
+                    self._history.appendleft(event)
             self._last_fault = previous.attributes.get("last_fault")
+        await super().async_added_to_hass()
 
     def _update_from_data(self):
         main = self._get_value("fault_main_code")
@@ -2081,6 +2136,22 @@ async def async_setup_entry(hass, entry, async_add_entities):
                      UnitOfFrequency.HERTZ, SensorDeviceClass.FREQUENCY, "mdi:sine-wave", 2),
         SimpleSensor(coordinator, "grid_power", "Grid Power",
                      UnitOfPower.WATT, SensorDeviceClass.POWER, "mdi:transmission-tower", 0),
+        SimpleSensor(coordinator, "grid_power_factor", "Grid Power Factor",
+                     None, None, "mdi:cosine-wave", 4),
+        GridPowerEstimateSensor(coordinator, "grid_active_power_estimate", "Grid Active Power Estimate"),
+        GridApparentEstimateSensor(coordinator, "grid_apparent_power_estimate", "Grid Apparent Power Estimate"),
+        SimpleSensor(coordinator, "inverter_ac_voltage", "Inverter AC Voltage",
+                     UnitOfElectricPotential.VOLT, SensorDeviceClass.VOLTAGE, "mdi:sine-wave", 1),
+        SimpleSensor(coordinator, "inverter_ac_current", "Inverter AC Current",
+                     UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT, "mdi:current-ac", 1),
+        SimpleSensor(coordinator, "inverter_output_active_power", "Inverter Output Active Power",
+                     UnitOfPower.WATT, SensorDeviceClass.POWER, "mdi:flash", 0),
+        SimpleSensor(coordinator, "inverter_output_apparent_power", "Inverter Output Apparent Power",
+                     UnitOfApparentPower.VOLT_AMPERE, None, "mdi:flash-outline", 0),
+        SimpleSensor(coordinator, "inverter_output_reactive_power", "Inverter Output Reactive Power",
+                     "var", None, "mdi:flash-outline", 0),
+        SimpleSensor(coordinator, "power_to_user_total", "Power To User Total",
+                     UnitOfPower.WATT, SensorDeviceClass.POWER, "mdi:home-lightning-bolt", 0),
         TimedAveragePowerSensor(
             coordinator,
             "avg_grid_power",

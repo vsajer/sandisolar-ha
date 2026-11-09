@@ -175,6 +175,10 @@ SENSOR_KEYS = [
     "inverter_status",
     "battery_status",
     "fault_word0",
+    "fault_word1", "fault_word2", "fault_word3", "fault_word4",
+    "fault_word5", "fault_word6", "fault_word7",
+    "fault_main_code", "fault_sub_code",
+    "bms_error1", "bms_error2", "bms_error3", "bms_error4",
     "warning_main",
     "warning_sub",
     "total_work_time",
@@ -1683,6 +1687,105 @@ class FaultWord0TextSensor(BaseSandiSensor):
         }
 
 
+
+class FaultMainCodeSensor(BaseSandiSensor):
+    _attr_icon = "mdi:alert-octagon-outline"
+
+    def _update_from_data(self):
+        value = self._get_value()
+        self._attr_native_value = int(value) if value is not None else None
+
+
+class FaultSubCodeSensor(BaseSandiSensor):
+    _attr_icon = "mdi:alert-circle-outline"
+
+    def _update_from_data(self):
+        value = self._get_value()
+        self._attr_native_value = int(value) if value is not None else None
+
+
+class FaultMainTextSensor(BaseSandiSensor):
+    _attr_icon = "mdi:alert-octagon"
+
+    def _update_from_data(self):
+        main = self._get_value("fault_main_code")
+        sub = self._get_value("fault_sub_code")
+        if main is None:
+            self._attr_native_value = None
+            return
+        code = int(main)
+        subcode = int(sub) if sub is not None else None
+        fallback = FAULT_WORD0_MAP.get(code, "Unknown fault code")
+        message = self._tr_state("fault_word0", code, fallback)
+        label = str(code)
+        if code != 0 and subcode not in (None, 0):
+            label += f"({subcode})"
+        self._attr_native_value = f"{label} - {message}"
+        self._attr_extra_state_attributes = {
+            "main_code": code,
+            "sub_code": subcode,
+            "sub_code_interpretation": "not verified",
+            "source": "input registers 32 and 34",
+        }
+
+
+
+class FaultHistorySensor(BaseSandiSensor, RestoreEntity):
+    _attr_icon = "mdi:history"
+
+    def __init__(self, coordinator, key, name):
+        super().__init__(coordinator, key, name)
+        self._history = deque(maxlen=20)
+        self._last_fault = None
+
+    async def async_added_to_hass(self):
+        await super().async_added_to_hass()
+        previous = await self.async_get_last_state()
+        if previous:
+            for event in previous.attributes.get("events", []):
+                if isinstance(event, dict):
+                    self._history.append(event)
+            self._last_fault = previous.attributes.get("last_fault")
+
+    def _update_from_data(self):
+        main = self._get_value("fault_main_code")
+        sub = self._get_value("fault_sub_code")
+        if main is not None:
+            main = int(main)
+            sub = int(sub) if sub is not None else None
+            if main:
+                code = f"{main}({sub})" if sub not in (None, 0) else str(main)
+                if code != self._last_fault:
+                    self._history.appendleft({
+                        "time": dt_util.utcnow().isoformat(),
+                        "code": code,
+                        "main": main,
+                        "sub": sub,
+                    })
+                    self._last_fault = code
+            else:
+                self._last_fault = None
+        self._attr_native_value = len(self._history)
+        self._attr_extra_state_attributes = {
+            "events": list(self._history),
+            "last_fault": self._last_fault,
+            "note": "Events observed during polling; short events can be missed",
+        }
+
+
+class FaultRawSensor(BaseSandiSensor):
+    _attr_icon = "mdi:code-braces"
+
+    def _update_from_data(self):
+        value = self._get_value()
+        self._attr_native_value = int(value) if value is not None else None
+        if value is not None:
+            self._attr_extra_state_attributes = {
+                "hex": f"0x{int(value):04X}",
+                "note": "Raw register, bit meanings not verified",
+            }
+
+
 class WarningMainCodeSensor(BaseSandiSensor):
     _attr_icon = "mdi:numeric"
 
@@ -2031,6 +2134,18 @@ async def async_setup_entry(hass, entry, async_add_entities):
         BatteryStatusTextSensor(coordinator, "battery_status", "Battery Status"),
 
         FaultWord0TextSensor(coordinator, "fault_word0", "Fault Word0 Text"),
+        FaultMainCodeSensor(coordinator, "fault_main_code", "Fault Main Code"),
+        FaultSubCodeSensor(coordinator, "fault_sub_code", "Fault Sub Code"),
+        FaultMainTextSensor(coordinator, "fault_main_code", "Fault Main Text"),
+        FaultHistorySensor(coordinator, "fault_main_code", "Fault History"),
+        *[
+            FaultRawSensor(coordinator, f"fault_word{i}", f"Fault Word{i} Raw")
+            for i in range(1, 8)
+        ],
+        *[
+            FaultRawSensor(coordinator, f"bms_error{i}", f"BMS Error{i} Raw")
+            for i in range(1, 5)
+        ],
 
         WarningMainCodeSensor(coordinator, "warning_main", "Warning Main Code"),
         WarningMainTextSensor(coordinator, "warning_main", "Warning Main Text"),

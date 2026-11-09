@@ -19,6 +19,19 @@ INPUT_REGISTERS = {
     "ambient_temp": RegisterDef(14, 0.1, signed=True),
 
     "fault_word0": RegisterDef(24),
+    "fault_word1": RegisterDef(25),
+    "fault_word2": RegisterDef(26),
+    "fault_word3": RegisterDef(27),
+    "fault_word4": RegisterDef(28),
+    "fault_word5": RegisterDef(29),
+    "fault_word6": RegisterDef(30),
+    "fault_word7": RegisterDef(31),
+    "fault_main_code": RegisterDef(32),
+    "fault_sub_code": RegisterDef(34),
+    "bms_error1": RegisterDef(131),
+    "bms_error2": RegisterDef(132),
+    "bms_error3": RegisterDef(133),
+    "bms_error4": RegisterDef(134),
     "warning_main": RegisterDef(33),
     "warning_sub": RegisterDef(35),
 
@@ -69,8 +82,8 @@ INPUT_REGISTERS = {
     "grid_in_energy_total": RegisterDef(417, 0.1, count=2),
     "energy_sold_today": RegisterDef(419, 0.1, count=2),
     "energy_sold_total": RegisterDef(421, 0.1, count=2),
-    "energy_bought_today": RegisterDef(425, 0.1, count=2),
-    "energy_bought_total": RegisterDef(423, 0.1, count=2),
+    "energy_bought_today": RegisterDef(423, 0.1, count=2),
+    "energy_bought_total": RegisterDef(425, 0.1, count=2),
     "energy_self_to_load_today": RegisterDef(427, 0.1, count=2),
     "energy_self_to_load_total": RegisterDef(429, 0.1, count=2),
 
@@ -141,10 +154,10 @@ HOLDING_REGISTERS = {
     # ---------------------------------------------------------------------
     "gen_port_work_mode": RegisterDef(216),
     # Reálně měnič používá hodnotu např. 4000 = 40.00 %
-    "sec_eps_on_vbat": RegisterDef(219, 0.1),
-    "sec_eps_off_vbat": RegisterDef(220, 0.1),
-    "sec_eps_on_soc": RegisterDef(221),
-    "sec_eps_off_soc": RegisterDef(222, 0.1),
+    "sec_eps_on_vbat": RegisterDef(220, 0.1),
+    "sec_eps_off_vbat": RegisterDef(222, 0.1),
+    "sec_eps_on_soc": RegisterDef(219, 0.01),
+    "sec_eps_off_soc": RegisterDef(221, 0.01),
     "sec_eps_on_pv_power_min": RegisterDef(223, 10),
 
     # ---------------------------------------------------------------------

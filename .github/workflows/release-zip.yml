@@ -1,0 +1,92 @@
+name: Package HACS release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to package (for example 9.2.5)
+        required: true
+        type: string
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/release-zip.yml
+      - hacs.json
+      - custom_components/sandisolar_modbus_rtu/**
+  pull_request:
+    paths:
+      - .github/workflows/release-zip.yml
+      - hacs.json
+      - custom_components/sandisolar_modbus_rtu/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-zip-${{ github.event.release.tag_name || inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the exact release or validation ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name && format('refs/tags/{0}', github.event.release.tag_name) || inputs.tag && format('refs/tags/{0}', inputs.tag) || github.ref }}
+          persist-credentials: false
+
+      - name: Build and verify the installable ZIP
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+
+          source = Path("custom_components/sandisolar_modbus_rtu")
+          manifest = json.loads((source / "manifest.json").read_text(encoding="utf-8"))
+          assert manifest["domain"] == source.name, "Unexpected integration domain"
+          assert (source / "__init__.py").is_file(), "Missing integration entry point"
+          files = sorted(
+              path for path in source.rglob("*")
+              if path.is_file()
+              and "__pycache__" not in path.parts
+              and path.suffix not in {".pyc", ".pyo"}
+          )
+          archive = Path("sandisolar_modbus_rtu.zip")
+          with ZipFile(archive, "w", ZIP_DEFLATED) as bundle:
+              for path in files:
+                  assert not path.is_symlink(), f"Unexpected symlink: {path}"
+                  bundle.write(path, path.relative_to(source).as_posix())
+          with ZipFile(archive) as bundle:
+              assert bundle.testzip() is None, "Corrupt archive"
+              assert "manifest.json" in bundle.namelist()
+              assert "__init__.py" in bundle.namelist()
+              assert len(bundle.namelist()) == len(files)
+              for path in files:
+                  name = path.relative_to(source).as_posix()
+                  assert bundle.read(name) == path.read_bytes(), name
+          print(f"Verified {archive}: {len(files)} files, version {manifest['version']}")
+          PY
+
+      - name: Attach ZIP without replacing an existing download counter
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          exists=$(gh release view "$RELEASE_TAG" --json assets --jq 'any(.assets[]; .name == "sandisolar_modbus_rtu.zip")')
+          if [ "$exists" = "true" ]; then
+            echo "ZIP already exists; keeping the file and its download counter."
+          else
+            gh release upload "$RELEASE_TAG" sandisolar_modbus_rtu.zip
+          fi
